@@ -1,0 +1,45 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: ed76558c8b1bbee63811af266ab7a442fbd405a3459abe03828c1a79b648417a
+
+name:           RiggedRegex
+version:        0.1.0.0
+category:       Web
+homepage:       https://github.com/elfsternberg/RegexWeightedPearl#readme
+author:         Elf M. Sternberg
+maintainer:     elf.sternberg@gmail.com
+copyright:      Copyright ⓒ 2019 Elf M. Sternberg
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      RiggedRegex
+  other-modules:
+      Paths_RiggedRegex
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base
+  default-language: Haskell2010
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Tests.hs
+  other-modules:
+      Paths_RiggedRegex
+  hs-source-dirs:
+      test
+  build-depends:
+      RiggedRegex
+    , base
+    , hspec
+  default-language: Haskell2010
