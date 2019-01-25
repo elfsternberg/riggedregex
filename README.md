@@ -29,12 +29,14 @@ I'm using the word "rig" as it's shorter; a semiring is related to the
 algebraic construct called a "ring," but cannot handle **n**egative
 elements, and so... a "rig."
 
-I'm hip to the idea of Fritz Henglein's dream of extracting all possible
-parsing information via a catamorphism over the parse tree, and that's
-exactly what semiring does.  I'm evaluating the use of the semiring over
-Might's parser combinator approach to see which is easier to implement
-and provides the most bang for the buck. So having regular expressions
-"rigged" just seemed like the right term.
+I'm hip to the idea of [Fritz Henglein's
+dream](http://www.cs.ox.ac.uk/ralf.hinze/WG2.8/27/slides/fritz.pdf) of
+extracting all possible parsing information via a catamorphism over the
+parse tree, and that's exactly what semiring does.  I'm evaluating the
+use of the semiring over [Might's parser combinator
+approach](http://matt.might.net/papers/might2011derivatives.pdf) to see
+which is easier to implement and provides the most bang for the buck. So
+having regular expressions "rigged" just seemed like the right term.
 
 ## Status
 
@@ -73,11 +75,14 @@ respectively, in Rust.
 
 ## LICENSE 
 
-The Rust code is Copyright Elf M. Sternberg (c) 2019.
+The Rust code is Copyright [Elf M. Sternberg](https://elfsternberg.com) (c) 2019.
 
 The Haskell code as presented so far is straight from the paper and
 therefor belongs to Sebastian Fischer, Frank Huch, and Thomas Wilke.  In
-the event that I choose an alternative DFA constructor (and I will,
-because they use Glushkov, and I'm trying to use Brzozowski), the files
-will be annotated to indicate which is which.
+the event that I choose an alternative DFA constructor (and I probably
+will, because they use [Glushkov's
+Construction](https://en.wikipedia.org/wiki/Glushkov%27s_construction_algorithm),
+and I'm trying to use [Brzozowski's
+Algorithm](https://en.wikipedia.org/wiki/Brzozowski_derivative#Derivative_of_a_regular_expression)),
+the files will be annotated to indicate which is which.
 
