@@ -62,6 +62,24 @@ pub fn split(s: &[char]) -> Vec<(Vec<char>, Vec<char>)> {
 // parts [c]    = [[[c]]]
 // parts (c:cs) = concat [[(c : p) : ps, [c] : p : ps] | p:ps <- parts cs]
 
+// This was challenging to port to Rust.  Haskell's automatic
+// conversion of [Char] to String obscured what was going on under the
+// covers.
+//
+// parts (c:cs) = concat [[(c : p) : ps, [c] : p : ps] | p:ps <- parts cs]
+// The two elements are:
+//
+// - ([c]:[[p]]):[[[ps]]]
+// The char 'c' is converted to a string, and that string is consed to
+// list 'p', and then list 'p' is consed onto the list 'ps'
+//
+// - [[c]]:[[p]]:[[[ps]]]
+// The char 'c' is made into a string and then wrapped in a list, and
+// then [[p]] and [[c]] are both consed onto list 'ps'
+//
+// It really took writing it all out on paper to understand the order
+// operation.
+
 pub fn parts(s: &[char]) -> Vec<Vec<Vec<char>>> {
     if s.is_empty() {
         return vec![vec![]];
