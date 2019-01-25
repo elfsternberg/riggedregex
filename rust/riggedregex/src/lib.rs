@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+// data Reg = Eps | Sym Char | Alt Reg Reg | Seq Reg Reg | Rep Reg
+
 #[derive(Debug)]
 pub enum Reg {
     Eps,
@@ -8,6 +10,9 @@ pub enum Reg {
     Seq(Rc<Reg>, Rc<Reg>),
     Rep(Rc<Reg>),
 }
+
+// Some rust-specific helpers to make constructing regular expressions
+// easier.
 
 pub fn eps() -> Rc<Reg> {
     Rc::new(Reg::Eps)
@@ -87,6 +92,13 @@ pub fn parts(s: &[char]) -> Vec<Vec<Vec<char>>> {
     }
     ret
 }
+
+// accept :: Reg -> String -> Bool
+// accept Eps u       = null u
+// accept (Sym c) u   = u == [c]
+// accept (Alt p q) u = accept p u || accept q u
+// accept (Seq p q) u = or [accept p u1 && accept q u2 | (u1, u2) <- split u]
+// accept (Rep r) u   = or [and [accept r ui | ui <- ps] | ps <- parts u]
 
 pub fn accept(r: &Reg, s: &[char]) -> bool {
     match r {
