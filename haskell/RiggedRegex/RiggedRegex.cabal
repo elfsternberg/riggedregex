@@ -4,11 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ed76558c8b1bbee63811af266ab7a442fbd405a3459abe03828c1a79b648417a
+-- hash: 5870c634e81ace2bab8713062d6635a451788b8915f1914afc26441261716ae9
 
 name:           RiggedRegex
 version:        0.1.0.0
-category:       Web
+category:       Regex
 homepage:       https://github.com/elfsternberg/RegexWeightedPearl#readme
 author:         Elf M. Sternberg
 maintainer:     elf.sternberg@gmail.com

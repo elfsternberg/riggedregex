@@ -1,3 +1,7 @@
+extern crate num_traits;
+
+use num_traits::{Zero, zero, One, one};
+use std::ops::{Mul, Add};
 use std::rc::Rc;
 
 // data Reg = Eps | Sym Char | Alt Reg Reg | Seq Reg Reg | Rep Reg
@@ -132,6 +136,91 @@ pub fn accept(r: &Reg, s: &[char]) -> bool {
     }
 }
 
+// Semiring Implementation?
+
+/* 
+As I understand it, in this implementation the semiring is
+abstracted further; it exists only as a collection of 
+implementations of the four laws of Semirings over a
+set.
+*/
+
+pub enum Regw<S>
+    where S: Zero + One
+{
+    Eps,
+    Sym(Box<Fn(char) -> S>),
+    Alt(Rc<Regw<S>>, Rc<Regw<S>>),
+    Seq(Rc<Regw<S>>, Rc<Regw<S>>),
+    Rep(Rc<Regw<S>>),
+}
+
+pub fn symw<S>(c: char) -> Regw<S>
+where S: Zero + One,
+{
+    let d = c;
+    Regw::Sym(Box::new(move |x| if x == d { one() } else { zero() }))
+}
+
+pub fn rig<S>(r: &Reg) -> Regw<S>
+where S: Zero + One
+{
+    match r {
+        Reg::Eps => Regw::Eps,
+        Reg::Sym(c) => symw(*c),
+        Reg::Alt(p, q) => Regw::Alt(Rc::new(rig(p)), Rc::new(rig(q))),
+        Reg::Seq(p, q) => Regw::Seq(Rc::new(rig(p)), Rc::new(rig(q))),
+        Reg::Rep(r)    => Regw::Rep(Rc::new(rig(r)))
+    }
+}
+
+/*
+acceptw :: Semiring s => Regw c s -> [c] -> s
+acceptw Epsw u     = if null u then one else zero
+acceptw (Symw f) u =
+    case u of
+      [c] -> f c
+      _ -> zero
+acceptw (Altw p q) u = acceptw p u `add` acceptw q u
+acceptw (Seqw p q) u = sumr [ acceptw p u1 `mul` acceptw q u2 | (u1, u2) <- split u ]
+acceptw (Repw r)   u = sumr [ prodr [ acceptw r ui | ui <- ps ] | ps <- parts u ]
+
+sumr, prodr :: Semiring r => [r] -> r
+sumr = foldr add zero
+prodr = foldr mul one
+ */
+
+pub fn sumr<S>(acc: S, next: S) -> S
+    where S: Zero + One
+{
+    acc + next
+}
+
+pub fn prod<S>(acc: S, next: S) -> S
+    where S: Zero + One
+{
+    acc * next
+}
+
+pub fn acceptw<S>(r: &Regw<S>, s: &[char]) -> S
+    where S: Zero + One
+{
+    match r {
+        Regw::Eps => if s.is_empty() { one() } else { zero() },
+        Regw::Sym(c) => if s.len() == 1 { c(s[0]) } else { zero() },
+        Regw::Alt(r1, r2) => S::add(acceptw(&r1, s), acceptw(&r2, s)),
+        Regw::Seq(r1, r2) => split(s)
+            .into_iter()
+            .map(|(u1, u2)| acceptw(r1, &u1) * acceptw(r2, &u2))
+            .fold(S::zero(), sumr),
+        Regw::Rep(r) => parts(s)
+            .into_iter()
+            .map(|ps| ps.into_iter().map(|u| acceptw(r, &u)).fold(S::one(), prod))
+            .fold(S::zero(), sumr)
+    }
+}
+
+    
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,4 +284,67 @@ mod tests {
         assert!(accept(&evencs, &c4))
     }
 
+    pub struct Recognizer(bool);
+
+    impl Zero for Recognizer {
+        fn zero() -> Recognizer { Recognizer(false) }
+        fn is_zero(&self) -> bool { !self.0 }
+    }
+
+    impl One for Recognizer {
+        fn one() -> Recognizer { Recognizer(true) }
+    }
+
+    impl Mul for Recognizer {
+        type Output = Recognizer;
+        fn mul(self, rhs: Recognizer) -> Recognizer { Recognizer(self.0 && rhs.0) }
+    }
+
+    impl Add for Recognizer {
+        type Output = Recognizer;
+        fn add(self, rhs: Recognizer) -> Recognizer { Recognizer(self.0 || rhs.0) }
+    }
+
+    pub struct Ambigcounter(u32);
+
+    impl Zero for Ambigcounter {
+        fn zero() -> Ambigcounter { Ambigcounter(0) }
+        fn is_zero(&self) -> bool { self.0 == 0 }
+    }
+
+    impl One for Ambigcounter {
+        fn one() -> Ambigcounter { Ambigcounter(1) }
+    }
+
+    impl Mul for Ambigcounter {
+        type Output = Ambigcounter;
+        fn mul(self, rhs: Ambigcounter) -> Ambigcounter { Ambigcounter(self.0 * rhs.0) }
+    }
+
+    impl Add for Ambigcounter {
+        type Output = Ambigcounter;
+        fn add(self, rhs: Ambigcounter) -> Ambigcounter { Ambigcounter(self.0 + rhs.0) }
+    }
+    
+    #[test]
+    fn test_ring_1() {
+        let c4: Vec<char> = String::from("abcc").chars().into_iter().collect();
+        let nocs = rep(&alt(&sym('a'), &sym('b')));
+        let onec = seq(&nocs, &sym('c'));
+        let evencs = seq(&rep(&seq(&onec, &onec)), &nocs);
+        let rigged: Regw<Recognizer>  = rig(&evencs);
+        assert!(acceptw(&rigged, &c4).0)
+    }
+
+    #[test]
+    fn test_ring_2() {
+        let c4: Vec<char> = String::from("ab").chars().into_iter().collect();
+        let aas = alt(&sym('a'), &rep(&sym('a')));
+        let bbs = alt(&sym('b'), &rep(&sym('b')));
+        let abs = seq(&aas, &bbs);
+        let rigged: Regw<Ambigcounter>  = rig(&abs);
+        assert_eq!(acceptw(&rigged, &c4).0, 4)
+    }
+    
+            
 }

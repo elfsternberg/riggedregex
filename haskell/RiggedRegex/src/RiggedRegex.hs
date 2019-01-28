@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module RiggedRegex ( accept, acceptw, Reg (..), Regw (..), rigged ) where
 
 data Reg = 
@@ -64,11 +66,12 @@ data Regw c s =
   | Repw (Regw c s)            -- R*
 
 rigged :: Semiring s => Reg -> Regw Char s
-rigged Eps = Epsw
-rigged (Sym c) = sym c
-rigged (Alt p q) = Altw (rigged p) (rigged q)
-rigged (Seq p q) = Seqw (rigged p) (rigged q)
-rigged (Rep r)   = Repw (rigged r)
+rigged = \case
+         Eps       -> Epsw
+         (Sym c)   -> sym c
+         (Alt p q) -> Altw (rigged p) (rigged q)
+         (Seq p q) -> Seqw (rigged p) (rigged q)
+         (Rep r)   -> Repw (rigged r)
 
 acceptw :: Semiring s => Regw c s -> [c] -> s
 acceptw Epsw u     = if null u then one else zero
