@@ -1,0 +1,6 @@
+[package]
+name = "simpleregex"
+version = "0.1.0"
+authors = ["Elf M. Sternberg <elf.sternberg@gmail.com>"]
+edition = "2018"
+

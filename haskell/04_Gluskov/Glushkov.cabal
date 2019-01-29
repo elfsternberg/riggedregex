@@ -1,0 +1,45 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 04079d06e350fc020ee9731039cc9b499edc0317e814346e1a6d13e23c61c2ae
+
+name:           Glushkov
+version:        0.1.0.0
+category:       Web
+homepage:       https://github.com/elfsternberg/Glushkov#readme
+author:         Elf M. Sternberg
+maintainer:     elf.sternberg@gmail.com
+copyright:      Copyright ⓒ 2019 Elf M. Sternberg
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      Glushkov
+  other-modules:
+      Paths_Glushkov
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base
+  default-language: Haskell2010
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Tests.hs
+  other-modules:
+      Paths_Glushkov
+  hs-source-dirs:
+      test
+  build-depends:
+      Glushkov
+    , base
+    , hspec
+  default-language: Haskell2010

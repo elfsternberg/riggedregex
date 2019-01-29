@@ -1,0 +1,45 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 2b06081e19cfbe96fa9a2d9a12695410d10cc0b73d3fe0c09d77986d2f101773
+
+name:           SimpleRegex
+version:        0.1.0.0
+category:       Regex
+homepage:       https://github.com/elfsternberg/RegexWeightedPearl#readme
+author:         Elf M. Sternberg
+maintainer:     elf.sternberg@gmail.com
+copyright:      Copyright ⓒ 2019 Elf M. Sternberg
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      SimpleRegex
+  other-modules:
+      Paths_SimpleRegex
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base
+  default-language: Haskell2010
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Tests.hs
+  other-modules:
+      Paths_SimpleRegex
+  hs-source-dirs:
+      test
+  build-depends:
+      SimpleRegex
+    , base
+    , hspec
+  default-language: Haskell2010

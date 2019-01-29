@@ -25,7 +25,7 @@ accept (Seq p q) u = or [accept p u1 && accept q u2 | (u1, u2) <- split u]
 accept (Rep r) u   = or [and [accept r ui | ui <- ps] | ps <- parts u]
 
 -- Generate a list of all possible combinations of a prefix and suffix
--- for the string offered.
+-- for the string offered.w
 split :: [a] -> [([a], [a])]
 split []     = [([], [])]
 split (c:cs) = ([], c : cs) : [(c : s1, s2) | (s1, s2) <- split cs]
@@ -98,3 +98,4 @@ instance Semiring Int where
     one = 1
     add = (+)
     mul = (*)
+

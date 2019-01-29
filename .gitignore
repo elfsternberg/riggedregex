@@ -25,4 +25,4 @@ dist-*
 *.prof
 **/*.rs.bk
 .stack-work/
-rust/riggedregex/target
+rust/**/target
