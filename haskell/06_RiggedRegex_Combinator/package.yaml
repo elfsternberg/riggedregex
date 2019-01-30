@@ -1,0 +1,31 @@
+name: RiggedRegex
+version:             0.1.0.0
+
+homepage:            https://github.com/elfsternberg/RegexWeightedPearl#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Elf M. Sternberg
+maintainer:          elf.sternberg@gmail.com
+copyright:           Copyright ⓒ 2019 Elf M. Sternberg
+category:            Regex
+build-type:          Simple
+extra-source-files:  README.md
+
+dependencies:
+  - containers
+  - base
+
+library:
+  exposed-modules: RiggedRegex
+  ghc-options: -Wall
+  source-dirs: src
+
+tests:
+  test:
+    main: Tests.hs
+    source-dirs: test
+    dependencies:
+      - RiggedRegex
+      - hspec
+  
+

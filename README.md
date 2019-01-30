@@ -47,10 +47,10 @@ efficiency and capability.  In total there are eight different regular
 expression engines implemented.
 
 Currently written:
-- [Boolean regular expressions in Haskell](./haskell/01_SimpleRegex) (Section I.1)
-- [Boolean regular expressions in Rust](./rust/01_simpleregex) (Section I.1)
-- [Rigged regular expressions in Haskell](./haskell/02_RiggedRegex) (Section I.2)
-- [Rigged regular expressions in Rust](./rust/02_riggedregex) (Section I.2)
+- [Kleene Booleann regular expressions in Haskell](./haskell/01_SimpleRegex) (Section I.1)
+- [Kleene Boolean regular expressions in Rust](./rust/01_simpleregex) (Section I.1)
+- [Rigged Kleene regular expressions in Haskell](./haskell/02_RiggedRegex) (Section I.2)
+- [Rigged Kleene regular expressions in Rust](./rust/02_riggedregex) (Section I.2)
 - [Glushkov construction of efficient Boolean regular expressions in Haskell](./haskell/04_Gluskov) (Section II.1a)
 - [Glushkov construction of efficient Boolean regular expressions](./rust/05_glushkov), in Rust (Section II.1a)
 - [Brzozowski's Boolean algorithm for regular expressions in Haskell](./haskell/03_Brzozowski)
@@ -58,6 +58,7 @@ Currently written:
 algorithm in a central function.
 - [Brzozowski's Boolean algorithm for regular expressions, in Rust](./rust/03_brzozowski_2), with
 the main algorithm divvied among the implementation sub-handlers.
+- [Rigged Kleene regular expressions in Haskell with Parse Forests](./haskell/06_RiggedRegex)
 
 ## Lessons learned
 
@@ -67,14 +68,23 @@ Rust.  The regular expressions being built are static and compiled at
 compile-time with the rest of the code.
 
 The best thing I've learned is that many Haskell idioms do port over
-easily to Rust.  Looking at the Rust version of `accept` and comparing
-it to the Haskell above, you can readily see just how straightforward it
-translates.
+easily to Rust.  Looking at the Rust version of `accept` in the first
+two examples and comparing them to the Haskell, you can readily see just
+how straightforward it translates.
 
 On the other hand, Haskell's ability to define list processing
 recursively really shines in the definitions of `split` and `parts`,
 which are both three lines long in Haskell, but 21 and 29 lines long
 respectively, in Rust.
+
+The other thing is that the "Rigged Kleene regular expressions in
+Haskell with Parse Forests" makes me unhappy; I don't have a good
+theoretical model for the change I made.  My expectation is that "one"
+here isn't just one, but also carries with it knowledge of what that
+"one-ness" means; the zero/one relationship sustains as far as the 
+poset is concerned, but the one value now carries knowledge the semiring
+needs to assemble the resulting parse forest.  This is similar to Matt
+Might's "smart epsilons," but I haven't gotten there yet.
 
 ## LICENSE 
 

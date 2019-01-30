@@ -1,0 +1,47 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 5502d8e130f48d549504b3c853cc091c0af15988f74b45e8e0af4fbe8a89c2a7
+
+name:           RiggedBrz
+version:        0.1.0.0
+category:       Web
+homepage:       https://github.com/elfsternberg/RiggedBrz#readme
+author:         Elf M. Sternberg
+maintainer:     elf.sternberg@gmail.com
+copyright:      Copyright ⓒ 2019 Elf M. Sternberg
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+library
+  exposed-modules:
+      RiggedBrz
+  other-modules:
+      Paths_RiggedBrz
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base
+    , containers
+  default-language: Haskell2010
+
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Tests.hs
+  other-modules:
+      Paths_RiggedBrz
+  hs-source-dirs:
+      test
+  build-depends:
+      RiggedBrz
+    , base
+    , containers
+    , hspec
+  default-language: Haskell2010
