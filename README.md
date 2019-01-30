@@ -51,8 +51,8 @@ Currently written:
 - Boolean regular expressions, in Rust (Section I.1)
 - Rigged regular expressions, in Haskell (Section I.2)
 - Rigged regular expressions, in Rust (Section I.2)
-- Glushkov construction of efficient regular expressions, in Haskell (Section II.1a)
-- Glushkov construction of efficient regular expressions, in Rust (Section II.1a)
+- Glushkov construction of efficient Boolean regular expressions, in Haskell (Section II.1a)
+- Glushkov construction of efficient Boolean regular expressions, in Rust (Section II.1a)
 - Brzozowski's Boolean algorithm for regular expressions, in Haskell
 - Brzozowski's Boolean algorithm for regular expressions, in Rust, with the main
 algorithm in a central function.
