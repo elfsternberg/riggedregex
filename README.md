@@ -46,15 +46,18 @@ The end of each scene describes a regular expression engine of some
 efficiency and capability.  In total there are eight different regular
 expression engines implemented.
 
-Right now, the Haskell version implements the first two.  The Rust
-version only implements the first.  That the Rust version works at all
-is somewhat amazing.
-
-Both versions are hideously inefficient, in that they do no epsilon
-shorting at all and so every possible combination of string and
-expression is analyzed.  For a string only eight letters long, the
-analysis takes about 30 seconds on my laptop; push that to twelve
-letters, and you'll be waiting an hour.
+Currently written:
+- Boolean regular expressions, in Haskell (Section I.1)
+- Boolean regular expressions, in Rust (Section I.1)
+- Rigged regular expressions, in Haskell (Section I.2)
+- Rigged regular expressions, in Rust (Section I.2)
+- Glushkov construction of efficient regular expressions, in Haskell (Section II.1a)
+- Glushkov construction of efficient regular expressions, in Rust (Section II.1a)
+- Brzozowski's Boolean algorithm for regular expressions, in Haskell
+- Brzozowski's Boolean algorithm for regular expressions, in Rust, with the main
+algorithm in a central function.
+- Brzozowski's Boolean algorithm for regular expressions, in Rust, with
+the main algorithm divvied among the implementation sub-handlers.
 
 ## Lessons learned
 

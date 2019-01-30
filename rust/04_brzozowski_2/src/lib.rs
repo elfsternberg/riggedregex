@@ -42,11 +42,6 @@ pub enum Brz {
     Rep(Rep)
 }
 
-trait Brznode {
-    fn derive(&self, c: &char) -> Rc<Brz>;
-    fn nullable(&self) -> bool;
-}
-
 impl Brz {
     fn derive(&self, c: &char) -> Rc<Brz> {
         match self {
@@ -72,6 +67,11 @@ impl Brz {
 
 }
                 
+trait Brznode {
+    fn derive(&self, c: &char) -> Rc<Brz>;
+    fn nullable(&self) -> bool;
+}
+
 impl Brznode for Emp {
     fn derive(&self, _: &char) -> Rc<Brz> {
         Rc::new(Brz::Emp(Emp{}))
