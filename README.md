@@ -47,16 +47,16 @@ efficiency and capability.  In total there are eight different regular
 expression engines implemented.
 
 Currently written:
-- Boolean regular expressions, in Haskell (Section I.1)
-- Boolean regular expressions, in Rust (Section I.1)
-- Rigged regular expressions, in Haskell (Section I.2)
-- Rigged regular expressions, in Rust (Section I.2)
-- Glushkov construction of efficient Boolean regular expressions, in Haskell (Section II.1a)
-- Glushkov construction of efficient Boolean regular expressions, in Rust (Section II.1a)
-- Brzozowski's Boolean algorithm for regular expressions, in Haskell
-- Brzozowski's Boolean algorithm for regular expressions, in Rust, with the main
+- [Boolean regular expressions in Haskell](./haskell/01_SimpleRegex) (Section I.1)
+- [Boolean regular expressions in Rust](./rust/01_simpleregex) (Section I.1)
+- [Rigged regular expressions in Haskell](./haskell/02_RiggedRegex) (Section I.2)
+- [Rigged regular expressions in Rust](./rust/02_riggedregex) (Section I.2)
+- [Glushkov construction of efficient Boolean regular expressions in Haskell](./haskell/04_Gluskov) (Section II.1a)
+- [Glushkov construction of efficient Boolean regular expressions](./rust/05_glushkov), in Rust (Section II.1a)
+- [Brzozowski's Boolean algorithm for regular expressions in Haskell](./haskell/03_Brzozowski)
+- [Brzozowski's Boolean algorithm for regular expressions in Rust](./rust/03_brzozowski_1), with the main
 algorithm in a central function.
-- Brzozowski's Boolean algorithm for regular expressions, in Rust, with
+- [Brzozowski's Boolean algorithm for regular expressions, in Rust](./rust/03_brzozowski_2), with
 the main algorithm divvied among the implementation sub-handlers.
 
 ## Lessons learned
