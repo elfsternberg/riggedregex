@@ -6,14 +6,6 @@ data Glu = Eps
          | Seq Glu Glu
          | Rep Glu
 
--- The implementation of Glushkov's construction here is dynamic; given
--- a regular expression, in its standard tree-like design, Glushkov
--- dynamically generates a sub rosa NFA.  In the implementation
--- described, this is emulated by 'marking' the position you're at in
--- the regular expression, and then, based on the character received,
--- 'marking' the next states.  The term used in the paper is to 'shift'
--- the marks to their next targets:
-
 shift :: Bool -> Glu -> Char -> Glu
 shift _ Eps _       = Eps
 shift m (Sym _ x) c = Sym (m && x == c) x

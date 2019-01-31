@@ -61,7 +61,11 @@ pub fn shift(g: &Rc<Glu>, m: bool, c: char) -> Rc<Glu> {
         Glu::Eps => eps(),
         Glu::Sym(_, s) => Rc::new(Glu::Sym(m && *s == c, *s)),
         Glu::Alt(r1, r2) => alt(&shift(r1, m, c), &shift(r2, m, c)),
-        Glu::Seq(r1, r2) => seq(&shift(r1, m, c), &shift(r2, m && empty(r1) || ended(r1), c)),
+        Glu::Seq(r1, r2) => {
+            let l_end = empty(r1);
+            let l_fin = ended(r1);
+            seq(&shift(r1, m, c), &shift(r2, m && l_end || l_fin, c))
+        },
         Glu::Rep(r) => rep(&shift(r, m || ended(r), c)),
     }
 }
