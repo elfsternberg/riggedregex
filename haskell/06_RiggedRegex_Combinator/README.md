@@ -16,3 +16,5 @@ The result is a regular expression engine that returns all possible
 unique sets of strings that resulted from matching the regular
 expression, or the empty set if no match happened.
 
+I'm not yet comfortable with the theoretical underpinnings of this 
+variant, but I'm reading intensely to see where I can land this.
