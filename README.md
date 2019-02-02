@@ -52,13 +52,32 @@ Currently written:
 - [Rigged Kleene regular expressions in Haskell](./haskell/02_RiggedRegex) (Section I.2)
 - [Rigged Kleene regular expressions in Rust](./rust/02_riggedregex) (Section I.2)
 - [Glushkov construction of efficient Boolean regular expressions in Haskell](./haskell/04_Gluskov) (Section II.1a)
-- [Glushkov construction of efficient Boolean regular expressions](./rust/05_glushkov), in Rust (Section II.1a)
+- [Glushkov construction of efficient Boolean regular expressions in Rust](./rust/05_glushkov), (Section II.1a)
 - [Brzozowski's Boolean algorithm for regular expressions in Haskell](./haskell/03_Brzozowski)
 - [Brzozowski's Boolean algorithm for regular expressions in Rust](./rust/03_brzozowski_1), with the main
 algorithm in a central function.
 - [Brzozowski's Boolean algorithm for regular expressions, in Rust](./rust/03_brzozowski_2), with
 the main algorithm divvied among the implementation sub-handlers.
 - [Rigged Kleene regular expressions in Haskell with Parse Forests](./haskell/06_RiggedRegex)
+- [Rigged Glushkov Regular Expressions in Haskell](./haskell/07_Rigged_Glushkov) (Section II.1b)
+- [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
+
+## Todo
+
+- Section II.2 of the paper (Substring matching)
+- An abstraction of the Brzozowski algorithm, without an 'enum' dispatch type.
+- Rigged implementations of the Brzozowski's algorithm, in Haskell
+- Rigged implementations of the Brzozowski's algorithm, in Rust
+- An explanation for how Might & Adam's code is secretly a concrete (and
+naive?) implementation of Semirings, a result of their being more
+Lisp-minded than Haskell-minded.
+- An exploration of whether or not extended regular expressions (regular
+expressions supporting the Intersection, Negation, and Interleaf
+operations) is theoretically sound.
+- An implementation of a Rigged Brzozowski Algorithm with Adams's and
+Darais's optimizations.
+- An implementation of a Rigged Brzozowski Algorithm with Might's
+recursion enabled, using Darais's laziness as its basis.
 
 ## Lessons learned
 
