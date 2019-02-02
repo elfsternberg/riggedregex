@@ -82,7 +82,7 @@ seqw :: Semiring s => Glue c s -> Glue c s -> Glue c s
 seqw l r =
   Glue
     { emptye = mul (emptye l) (emptye r),
-      finale = add (mul (finale l) (emptye r)) (emptye r),
+      finale = add (mul (finale l) (emptye r)) (finale r),
       gluw = Seqw l r
     }
 

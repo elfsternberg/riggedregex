@@ -22,7 +22,7 @@ the return type.  We then define the "symbol accepted" boolean to return
 either the `zero` or `one` type of the semiring.
 
 I've provided two semirings: One of (0, 1, +, *, Integers), and one of
-(False, True, ||, &&, Booleans).  Both work well.
+(False, True, ||, &&, Booleans).  Both work well.  
 
 Rust isn't nearly as magical as Haskell.  (See the Readme in the
 equivalent Haskell version for my comments on that.)  On the other hand,
