@@ -12,6 +12,13 @@ use std::ops::Deref;
 use std::ops::{Add, Mul};
 use std::rc::Rc;
 
+/// Implementors of this code MUST implement both the `Rmul` and `Mul`
+/// versions, and the `Radd` and `Add` versions, of these operations,
+/// to support semiring processing correctly.  Rust's ops traits
+/// cannot, to the best of my knowledge, handle references, and
+/// thrashing a lot of clones of large parse trees about was, shall we
+/// say, sub-optimal.
+
 pub trait Rmul<ITY=Self> {
     fn rmul(lhs: &ITY, rhs: &ITY) -> ITY;
 }
@@ -30,8 +37,6 @@ where
     fn is(&self, c: char) -> S;
 }
 
-// Empty, Final, Data
-
 pub enum Glui<S>
 where
     S: Zero + One + Clone + Rmul + Radd,
@@ -43,6 +48,7 @@ where
     Rep(Rc<Glu<S>>),
 }
 
+// Empty, Final, Data
 pub struct Glu<S: Zero + One + Clone + Rmul + Radd> (S, S, Glui<S>);
 
 /// Recognize only the empty string
