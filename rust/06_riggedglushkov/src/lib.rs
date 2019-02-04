@@ -12,22 +12,29 @@ use std::ops::Deref;
 use std::ops::{Add, Mul};
 use std::rc::Rc;
 
+pub trait Rmul<ITY=Self> {
+    fn rmul(lhs: &ITY, rhs: &ITY) -> ITY;
+}
+
+pub trait Radd<ITY=Self> {
+    fn radd(lhs: &ITY, rhs: &ITY) -> ITY;
+}
 
 /// The Sym trait represents what to do for a single character.  It has
 /// a single method, "is", that returns the semiring.  Implementers of
 /// "is" must provide a corresponding construction factory.
 pub trait Sym<S> 
 where
-    S: Zero + One + Clone
+    S: Zero + One + Clone + Rmul + Radd
 {
     fn is(&self, c: char) -> S;
 }
-    
+
 // Empty, Final, Data
 
 pub enum Glui<S>
 where
-    S: Zero + One + Clone,
+    S: Zero + One + Clone + Rmul + Radd,
 {
     Eps,
     Sym(Rc<Sym<S>>),
@@ -36,12 +43,12 @@ where
     Rep(Rc<Glu<S>>),
 }
 
-pub struct Glu<S: Zero + One + Clone> (S, S, Glui<S>);
+pub struct Glu<S: Zero + One + Clone + Rmul + Radd> (S, S, Glui<S>);
 
 /// Recognize only the empty string
 pub fn eps<S>() -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone,
+    S: Zero + One + Clone + Rmul + Radd,
 {
     Rc::new(Glu(one(), one(), Glui::Eps))
 }
@@ -49,23 +56,23 @@ where
 /// Recognize alternatives between two other regexes
 pub fn alt<S>(r1: &Rc<Glu<S>>, r2: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone,
+    S: Zero + One + Clone + Rmul + Radd,
 {
-    Rc::new(Glu(r1.0.clone() + r2.0.clone(), r1.1.clone() + r2.1.clone(), Glui::Alt(r1.clone(), r2.clone())))
+    Rc::new(Glu(S::radd(&r1.0, &r2.0), S::radd(&r1.1, &r2.1), Glui::Alt(r1.clone(), r2.clone())))
 }
 
 /// Recognize a sequence of regexes in order
 pub fn seq<S>(r1: &Rc<Glu<S>>, r2: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone,
+    S: Zero + One + Clone + Rmul + Radd,
 {
-    Rc::new(Glu(r1.0.clone() + r2.0.clone(), r1.1.clone() * r2.0.clone() + r2.1.clone(), Glui::Seq(r1.clone(), r2.clone())))
+    Rc::new(Glu(S::radd(&r1.0, &r2.0), S::radd(&S::rmul(&r1.1, &r2.0), &r2.1), Glui::Seq(r1.clone(), r2.clone())))
 }
 
 /// Recognize a regex repeated zero or more times.
 pub fn rep<S>(r1: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone,
+    S: Zero + One + Clone + Rmul + Radd,
 {
     Rc::new(Glu(one(), r1.1.clone(), Glui::Rep(r1.clone())))
 }
@@ -77,34 +84,34 @@ where
 // as Rust won't keep the intermediate functions generated, nor
 // provide them ad-hoc to future operations the way Haskell does.
 //
-fn shift<S>(g: &Rc<Glu<S>>, m: S, c: char) -> Rc<Glu<S>>
+fn shift<S>(g: &Rc<Glu<S>>, m: &S, c: char) -> Rc<Glu<S>>
 where
-    S: One + Zero + Clone
+    S: One + Zero + Clone + Rmul + Radd
 {
     use self::Glui::*;
     match &g.deref().2 {
         Eps         => eps(),
-        Sym(f)      => Rc::new(Glu(zero(), m.clone() * f.is(c), Glui::Sym(f.clone()))),
-        Alt(r1, r2) => alt(&shift(&r1, m.clone(), c), &shift(&r2, m.clone(), c)),
-        Seq(r1, r2) => seq(&shift(&r1, m.clone(), c), &shift(&r2, m.clone() * r1.0.clone() + r1.1.clone(), c)),
-        Rep(r)      => rep(&shift(&r, m.clone() + r.1.clone(), c)),
+        Sym(f)      => Rc::new(Glu(zero(), S::rmul(m, &f.is(c)), Glui::Sym(f.clone()))),
+        Alt(r1, r2) => alt(&shift(&r1, m, c), &shift(&r2, m, c)),
+        Seq(r1, r2) => seq(&shift(&r1, m, c), &shift(&r2, &S::radd(&r1.1, &S::rmul(m, &r1.0)), c)),
+        Rep(r)      => rep(&shift(&r, &S::radd(m, &r.1), c)),
     }
 }
     
 pub fn accept<S>(g: &Rc<Glu<S>>, s: &str) -> S
 where
-    S: One + Zero + Clone
+    S: One + Zero + Clone + Rmul + Radd
 {
     if s.is_empty() {
         return g.0.clone()
     }
 
-    let ashift = |g, c| { shift(&g, zero(), c) };
+    let ashift = |g, c| { shift(&g, &zero(), c) };
 
     // This is kinda cool. I wonder if I can make the Brz versions look
     // like this.
     let mut seq = s.chars();
-    let start = shift(g, one(), seq.next().unwrap());
+    let start = shift(g, &one(), seq.next().unwrap());
     (&seq.fold(start, ashift)).1.clone()
 }
 
@@ -142,6 +149,14 @@ mod tests {
     impl Add for Recognizer {
         type Output = Recognizer;
         fn add(self, rhs: Recognizer) -> Recognizer { Recognizer(self.0 || rhs.0) }
+    }
+
+    impl Rmul for Recognizer {
+        fn rmul(lhs: &Recognizer, rhs: &Recognizer) -> Recognizer { Recognizer(lhs.0 && rhs.0) }
+    }
+
+    impl Radd for Recognizer {
+        fn radd(lhs: &Recognizer, rhs: &Recognizer) -> Recognizer { Recognizer(lhs.0 || rhs.0) }
     }
 
     pub struct SimpleSym
@@ -188,7 +203,6 @@ mod tests {
             ),
         ];
 
-        
         for (name, case, sample, result) in &cases {
             println!("{:?}", name);
             assert_eq!(accept(case, &sample.to_string()).0, *result);
@@ -207,15 +221,16 @@ mod tests {
         fn one() -> Parser { Parser(set!["".to_string()]) }
     }
 
+    
+
     // This is the tricky one; the product of two sets of strings is a
     // set containing the concatenation of the tuples of the cartesian
     // products from the two sets.
 
-    impl Mul for Parser {
-        type Output = Parser;
-        fn mul(self, rhs: Parser) -> Parser {
+    impl Rmul for Parser {
+        fn rmul(lhs: &Parser, rhs: &Parser) -> Parser {
             let mut temp = set![];
-            for i in self.0.iter().cloned() {
+            for i in lhs.0.iter().cloned() {
                 for j in &rhs.0 {
                     temp.insert(i.clone() + &j);
                 }
@@ -224,11 +239,24 @@ mod tests {
         }
     }
 
-    impl Add for Parser {
-        type Output = Parser;
-        fn add(self, rhs: Parser) -> Parser { Parser(self.0.union(&rhs.0).cloned().collect()) }
+    impl Radd for Parser {
+        fn radd(lhs: &Parser, rhs: &Parser) -> Parser { Parser(lhs.0.union(&rhs.0).cloned().collect()) }
     }
 
+    impl Mul for Parser {
+        type Output = Parser;
+        fn mul(self, rhs: Parser) -> Parser {
+            Parser::rmul(&self, &rhs)
+        }
+    }
+
+    impl Add for Parser {
+        type Output = Parser;
+        fn add(self, rhs: Parser) -> Parser {
+            Parser::radd(&self, &rhs)
+        }
+    }
+    
     pub struct ParserSym
     {
         c: char,
