@@ -33,17 +33,14 @@ The `Sym` expression is a *trait* now; it says that users must provide
 an implementation with a single method, `is`, that takes a symbol and
 returns a semiring.
 
-It turns out that the `Mul` and `Add` traits cannot take references.  In
-my [first commit of this
-experiment](https://github.com/elfsternberg/riggedregex/tree/41c39a1c4a94bd7edd2d20883cc77cd53bf2966e),
-I ended up implementing a lot of `.clone()`ing of the semiring
-implementation, which is okay for `bool` and `int`, but when I started
-doing it with `HashSet<String>` well, that's a lot of memory and cpu to
-waste.
-
-I've had to implement my own versions, `RMul` and `RAdd`, and their
-follow-on operators.  It feels very cluttered, but it also handles only
-one copy of any given set.
+I've had to abandon the use of `num_traits` and `std::ops`, as
+`std::ops::Mul` and `std::ops::Add` don't provide a framework for
+passing in references.  I've gone back to my initial instincts and
+provided a comprehensive `Semiring` trait which can take references for
+the `mul` and `add` operations.  This works very well, as now I can
+analyze and operate on immutable `HashSet<String>` collections without
+having to clone them to pass them to the cartesian product operation.
+That's a massive win in terms of memory and CPU savings.
 
 The construction processing the expression using Gluskov's progressive
 algorithm is the same as the unrigged version, only we cache the "empty"
@@ -56,10 +53,11 @@ a specific Sym implementation for the `Sym` trait, and include a
 function to instantiate that implementation for your use case.
 
 The `Parser` version has a specific moment of complexity that can't be
-elided: in the `Mul` implementation, the multiplication of two sets is
+elided: in the `mul` implementation, the multiplication of two sets is
 the cartesian product of those sets: a new set containing all possible
 combinations of ordered tuples made up of a member of the first set with
 a member of the second set.  For our purposes, this is a still a string,
 so our implementation involves building those tuples and then generating
 a new string by concatenating the orderded pair.  This takes a bit of
-memory thrashing.
+memory thrashing, but much less now that I've solved the `mul(&x, &y)`
+issue.

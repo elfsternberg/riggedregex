@@ -4,42 +4,31 @@
 //! value describing if the expression matched the string (or not).
 //!
 
-extern crate num_traits;
-use num_traits::{one, zero, One, Zero};
 use std::collections::HashSet;
-
-use std::ops::Deref;
-use std::ops::{Add, Mul};
 use std::rc::Rc;
 
-/// Implementors of this code MUST implement both the `Rmul` and `Mul`
-/// versions, and the `Radd` and `Add` versions, of these operations,
-/// to support semiring processing correctly.  Rust's ops traits
-/// cannot, to the best of my knowledge, handle references, and
-/// thrashing a lot of clones of large parse trees about was, shall we
-/// say, sub-optimal.
-
-pub trait Rmul<ITY=Self> {
-    fn rmul(lhs: &ITY, rhs: &ITY) -> ITY;
+pub trait Semiring {
+    fn zero() -> Self;
+    fn one() -> Self;
+    fn is_zero(&self) -> bool;
+    fn mul(&self, rhs: &Self) -> Self;
+    fn add(&self, rhs: &Self) -> Self;
 }
-
-pub trait Radd<ITY=Self> {
-    fn radd(lhs: &ITY, rhs: &ITY) -> ITY;
-}
-
+    
 /// The Sym trait represents what to do for a single character.  It has
 /// a single method, "is", that returns the semiring.  Implementers of
 /// "is" must provide a corresponding construction factory.
-pub trait Sym<S> 
+
+pub trait Sym<S>
 where
-    S: Zero + One + Clone + Rmul + Radd
+    S: Semiring
 {
     fn is(&self, c: char) -> S;
 }
 
 pub enum Glui<S>
 where
-    S: Zero + One + Clone + Rmul + Radd,
+    S: Semiring
 {
     Eps,
     Sym(Rc<Sym<S>>),
@@ -49,38 +38,38 @@ where
 }
 
 // Empty, Final, Data
-pub struct Glu<S: Zero + One + Clone + Rmul + Radd> (S, S, Glui<S>);
+pub struct Glu<S: Semiring> (S, S, Glui<S>);
 
 /// Recognize only the empty string
 pub fn eps<S>() -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone + Rmul + Radd,
+    S: Semiring
 {
-    Rc::new(Glu(one(), one(), Glui::Eps))
+    Rc::new(Glu(S::one(), S::one(), Glui::Eps))
 }
 
 /// Recognize alternatives between two other regexes
 pub fn alt<S>(r1: &Rc<Glu<S>>, r2: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone + Rmul + Radd,
+    S: Semiring
 {
-    Rc::new(Glu(S::radd(&r1.0, &r2.0), S::radd(&r1.1, &r2.1), Glui::Alt(r1.clone(), r2.clone())))
+    Rc::new(Glu(r1.0.add(&r2.0), r1.1.add(&r2.1), Glui::Alt(r1.clone(), r2.clone())))
 }
 
 /// Recognize a sequence of regexes in order
 pub fn seq<S>(r1: &Rc<Glu<S>>, r2: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone + Rmul + Radd,
+    S: Semiring
 {
-    Rc::new(Glu(S::radd(&r1.0, &r2.0), S::radd(&S::rmul(&r1.1, &r2.0), &r2.1), Glui::Seq(r1.clone(), r2.clone())))
+    Rc::new(Glu(r1.0.add(&r2.0), r1.1.mul(&r2.0).add(&r2.1), Glui::Seq(r1.clone(), r2.clone())))
 }
 
 /// Recognize a regex repeated zero or more times.
 pub fn rep<S>(r1: &Rc<Glu<S>>) -> Rc<Glu<S>>
 where
-    S: Zero + One + Clone + Rmul + Radd,
+    S: Semiring + Clone
 {
-    Rc::new(Glu(one(), r1.1.clone(), Glui::Rep(r1.clone())))
+    Rc::new(Glu(S::one(), r1.1.clone(), Glui::Rep(r1.clone())))
 }
 
 // The main function: repeatedly traverses the tree, modifying as it
@@ -92,32 +81,32 @@ where
 //
 fn shift<S>(g: &Rc<Glu<S>>, m: &S, c: char) -> Rc<Glu<S>>
 where
-    S: One + Zero + Clone + Rmul + Radd
+    S: Semiring + Clone
 {
     use self::Glui::*;
-    match &g.deref().2 {
+    match &g.2 {
         Eps         => eps(),
-        Sym(f)      => Rc::new(Glu(zero(), S::rmul(m, &f.is(c)), Glui::Sym(f.clone()))),
+        Sym(f)      => Rc::new(Glu(S::zero(), m.mul(&f.is(c)), Glui::Sym(f.clone()))),
         Alt(r1, r2) => alt(&shift(&r1, m, c), &shift(&r2, m, c)),
-        Seq(r1, r2) => seq(&shift(&r1, m, c), &shift(&r2, &S::radd(&r1.1, &S::rmul(m, &r1.0)), c)),
-        Rep(r)      => rep(&shift(&r, &S::radd(m, &r.1), c)),
+        Seq(r1, r2) => seq(&shift(&r1, m, c), &shift(&r2, &(m.mul(&r1.0).add(&r1.1)), c)),
+        Rep(r)      => rep(&shift(&r, &(m.add(&r.1)), c)),
     }
 }
     
 pub fn accept<S>(g: &Rc<Glu<S>>, s: &str) -> S
 where
-    S: One + Zero + Clone + Rmul + Radd
+    S: Semiring + Clone
 {
     if s.is_empty() {
         return g.0.clone()
     }
 
-    let ashift = |g, c| { shift(&g, &zero(), c) };
+    let ashift = |g, c| { shift(&g, &S::zero(), c) };
 
     // This is kinda cool. I wonder if I can make the Brz versions look
     // like this.
     let mut seq = s.chars();
-    let start = shift(g, &one(), seq.next().unwrap());
+    let start = shift(g, &S::one(), seq.next().unwrap());
     (&seq.fold(start, ashift)).1.clone()
 }
 
@@ -138,31 +127,12 @@ mod tests {
     #[derive(Debug, Copy, Clone)]
     pub struct Recognizer(bool);
 
-    impl Zero for Recognizer {
+    impl Semiring for Recognizer {
+        fn one() -> Recognizer { Recognizer(true) }
         fn zero() -> Recognizer { Recognizer(false) }
         fn is_zero(&self) -> bool { !self.0 }
-    }
-
-    impl One for Recognizer {
-        fn one() -> Recognizer { Recognizer(true) }
-    }
-
-    impl Mul for Recognizer {
-        type Output = Recognizer;
-        fn mul(self, rhs: Recognizer) -> Recognizer { Recognizer(self.0 && rhs.0) }
-    }
-
-    impl Add for Recognizer {
-        type Output = Recognizer;
-        fn add(self, rhs: Recognizer) -> Recognizer { Recognizer(self.0 || rhs.0) }
-    }
-
-    impl Rmul for Recognizer {
-        fn rmul(lhs: &Recognizer, rhs: &Recognizer) -> Recognizer { Recognizer(lhs.0 && rhs.0) }
-    }
-
-    impl Radd for Recognizer {
-        fn radd(lhs: &Recognizer, rhs: &Recognizer) -> Recognizer { Recognizer(lhs.0 || rhs.0) }
+        fn mul(&self, rhs: &Recognizer) -> Recognizer { Recognizer(self.0 && rhs.0) }
+        fn add(&self, rhs: &Recognizer) -> Recognizer { Recognizer(self.0 || rhs.0) }
     }
 
     pub struct SimpleSym
@@ -172,7 +142,7 @@ mod tests {
     
     impl Sym<Recognizer> for SimpleSym {
         fn is(&self, c: char) -> Recognizer {
-            if c == self.c { one() } else { zero() }
+            if c == self.c { Recognizer::one() } else { Recognizer::zero() }
         }
     }
             
@@ -181,7 +151,7 @@ mod tests {
         
         pub fn sym(sample: char) -> Rc<Glu<Recognizer>>
         {
-            Rc::new(Glu(zero(), zero(), Glui::Sym(Rc::new(SimpleSym{ c: sample }))))
+            Rc::new(Glu(Recognizer::zero(), Recognizer::zero(), Glui::Sym(Rc::new(SimpleSym{ c: sample }))))
         }
         
         let cases = [
@@ -218,56 +188,28 @@ mod tests {
     #[derive(Debug, Clone)]
     pub struct Parser(HashSet<String>);
 
-    impl Zero for Parser {
+    impl Semiring for Parser {
+        fn one() -> Parser { Parser(set!["".to_string()]) }
         fn zero() -> Parser { Parser(set![]) }
         fn is_zero(&self) -> bool { self.0.len() == 0 }
-    }
-
-    impl One for Parser {
-        fn one() -> Parser { Parser(set!["".to_string()]) }
-    }
-
-    
-
-    // This is the tricky one; the product of two sets of strings is a
-    // set containing the concatenation of the tuples of the cartesian
-    // products from the two sets.
-
-    impl Rmul for Parser {
-        fn rmul(lhs: &Parser, rhs: &Parser) -> Parser {
+        fn mul(self: &Parser, rhs: &Parser) -> Parser {
             let mut temp = set![];
-            for i in lhs.0.iter().cloned() {
+            for i in self.0.iter().cloned() {
                 for j in &rhs.0 {
                     temp.insert(i.clone() + &j);
                 }
             }
             Parser(temp)
         }
-    }
-
-    impl Radd for Parser {
-        fn radd(lhs: &Parser, rhs: &Parser) -> Parser { Parser(lhs.0.union(&rhs.0).cloned().collect()) }
-    }
-
-    impl Mul for Parser {
-        type Output = Parser;
-        fn mul(self, rhs: Parser) -> Parser {
-            Parser::rmul(&self, &rhs)
+        fn add(self: &Parser, rhs: &Parser) -> Parser {
+            Parser(self.0.union(&rhs.0).cloned().collect())
         }
     }
 
-    impl Add for Parser {
-        type Output = Parser;
-        fn add(self, rhs: Parser) -> Parser {
-            Parser::radd(&self, &rhs)
-        }
+    pub struct ParserSym {
+        c: char
     }
-    
-    pub struct ParserSym
-    {
-        c: char,
-    }
-    
+
     impl Sym<Parser> for ParserSym {
         fn is(&self, c: char) -> Parser {
             if c == self.c { Parser(set![c.to_string()]) } else { Parser::zero() }
@@ -278,7 +220,7 @@ mod tests {
     fn string_basics() {
         pub fn sym(sample: char) -> Rc<Glu<Parser>>
         {
-            Rc::new(Glu(zero(), zero(), Glui::Sym(Rc::new(ParserSym{ c: sample }))))
+            Rc::new(Glu(Parser::zero(), Parser::zero(), Glui::Sym(Rc::new(ParserSym{ c: sample }))))
         }
         
         let cases = [
