@@ -1,33 +1,98 @@
-module RiggedBrz ( accept, nullable, Brz (..) ) where
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE FlexibleInstances #-}
+
+module RiggedBrz ( Brz (..), parse, rigged, riggeds ) where
 
 import Data.Set
     
-data Brz = Emp | Eps | Sym Char | Alt Brz Brz | Seq Brz Brz | Rep Brz
+data Brz = Emp | Eps | Sym Char | Alt Brz Brz | Seq Brz Brz | Rep Brz deriving (Eq)
 
-derive :: Brz -> Char -> Brz
-derive Emp _       = Emp
-derive Eps _       = Emp
-derive (Sym c) u   = if c == u then Eps else Emp
-derive (Seq l r) u
-    | nullable l = Alt (Seq (derive l u) r) (derive r u)
-    | otherwise  = Seq (derive l u) r
+-- Transform a Brz into a Brzr.  That's all it does.  It's not magical.
+              
+rigging :: Semiring s => (Char -> Brzr Char s) -> Brz -> Brzr Char s
+rigging s = \case
+             Emp -> Empr
+             Eps -> Epsr one
+             (Sym c) -> s c
+             (Alt p q) -> Altr (rigging s p) (rigging s q)
+             (Seq p q) -> Seqr (rigging s p) (rigging s q)
+             (Rep r) -> Repr (rigging s r)
 
-derive (Alt Emp r) u = derive r u                    
-derive (Alt l Emp) u = derive l u                    
-derive (Alt l r) u   = Alt (derive r u) (derive l u)
+class Semiring s where
+  zero, one :: s
+  mul, add :: s -> s -> s
 
-derive (Rep r) u = Seq (derive r u) (Rep r)
+data Brzr c s = Empr
+              | Epsr s
+              | Delr (Brzr c s)
+              | Symr (c -> s)
+              | Altr (Brzr c s) (Brzr c s)
+              | Seqr (Brzr c s) (Brzr c s)
+              | Repr (Brzr c s)
 
-nullable :: Brz -> Bool
-nullable Emp       = False
-nullable Eps       = True
-nullable (Sym _)   = False
-nullable (Alt l r) = nullable l || nullable r
-nullable (Seq l r) = nullable l && nullable r
-nullable (Rep _)   = True                     
+deriver :: Semiring s => Brzr c s -> c -> Brzr c s
+deriver Empr _        = Empr
+deriver (Epsr _) _    = Empr
+deriver (Delr _) _    = Empr
+deriver (Symr f) u    = Epsr $ (f u)
 
-accept :: Brz -> String -> Bool
-accept r [] = nullable r
-accept r (s:ss) = accept (derive r s) ss
+deriver (Seqr l r) u  =
+    Altr dl dr
+        where
+          dl = Seqr (deriver l u) r
+          dr = Seqr (Delr l) (deriver r u)
 
+deriver (Altr l r) u = go (deriver l u) (deriver r u)
+    where go Empr r1 = r1
+          go r1 Empr = r1
+          go l1 r1 = Altr l1 r1
+        
+deriver (Repr r) u = Seqr (deriver r u) (Repr r)
+
+parsenull :: Semiring s => (Brzr c s) -> s
+parsenull Empr = zero
+parsenull (Symr _)   = zero
+parsenull (Repr _)   = one
+parsenull (Epsr s)   = s
+parsenull (Delr s)   = parsenull s
+parsenull (Altr p q) = parsenull p `add` parsenull q
+parsenull (Seqr p q) = parsenull p `mul` parsenull q
+
+instance Semiring Int where
+    zero = 0
+    one = 1
+    add = (Prelude.+)
+    mul = (Prelude.*)
+
+instance Semiring Bool where
+    zero = False
+    one = True
+    add = (||)
+    mul = (&&)
+
+instance Semiring (Set String) where
+    zero    = empty 
+    one     = singleton ""
+    add     = union
+    mul a b = Data.Set.map (uncurry (++)) $ cartesianProduct a b
+
+-- Rigging for boolean and integer values.              
+
+sym :: Semiring s => Char -> Brzr Char s
+sym c = Symr (\b -> if b == c then one else zero)      
+
+rigged :: Semiring s => Brz -> Brzr Char s
+rigged = rigging sym
+
+-- Rigging for parse forests
+         
+syms :: Char -> Brzr Char (Set String)
+syms c = Symr (\b -> if b == c then singleton [c] else zero)
+         
+riggeds :: Brz -> Brzr Char (Set String)
+riggeds = rigging syms
+              
+parse :: (Semiring s) => (Brzr Char s) -> String -> s
+parse w [] = parsenull w
+parse w (c:cs) = parse (deriver w c) cs
        

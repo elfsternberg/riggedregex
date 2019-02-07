@@ -1,21 +1,48 @@
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# LANGUAGE RecordWildCards #-}
-
 import           Data.Foldable     (for_)
-import           Test.Hspec        (Spec, describe, it, shouldBe)
-import           Test.Hspec.Runner (configFastFail, defaultConfig, hspecWith)
-
-import           RiggedBrz         (Brz (..), accept)
-
+import Test.Hspec        (Spec, it, shouldBe)
+import Test.Hspec.Runner (configFastFail, defaultConfig, hspecWith)
+import RiggedBrz ( Brz (..), parse, rigged, riggeds )
+import Data.Set
+import Data.List (sort)
+    
 main :: IO ()
 main = hspecWith defaultConfig {configFastFail = True} specs
 
 specs :: Spec
-specs = describe "accept" $ for_ cases test
-  where
-    test Case {..} = it description assertion
-      where
-        assertion = accept regex sample `shouldBe` result
+specs = do
+
+     let nocs = Rep ( Alt ( Sym 'a' ) ( Sym 'b' ) )
+     let onec = Seq nocs (Sym 'c')
+     let evencs = Seq ( Rep ( Seq onec onec ) ) nocs
+
+     let as = Alt (Sym 'a') (Rep (Sym 'a'))                  
+     let bs = Alt (Sym 'b') (Rep (Sym 'b'))
+
+     it "lifted expression" $
+        (parse (rigged evencs) "acc" :: Bool) `shouldBe` True
+
+     it "lifted expression short" $
+        (parse (rigged evencs) "acc" :: Int) `shouldBe` 1
+
+     it "lifted expression counter two" $
+        (parse (rigged as) "a" :: Int) `shouldBe` 2
+
+     it "lifted expression counter one" $
+        (parse (rigged as) "aa" :: Int) `shouldBe` 1
+
+     it "lifted expression dynamic counter four" $
+        (parse (rigged (Seq as bs)) "ab" :: Int) `shouldBe` 4
+
+     it "parse forests" $
+            (sort $ toList $ (parse (riggeds (Seq as bs)) "ab" :: Set String)) `shouldBe` ["ab"]
+                                                  
+     for_ cases test
+        where
+          test Case {..} = it description assertion
+              where
+                assertion = (parse (rigged regex) sample :: Bool) `shouldBe` result
 
 data Case = Case
   { description :: String
@@ -24,15 +51,9 @@ data Case = Case
   , result      :: Bool
   }
 
--- let nocs = Rep ( Alt ( Sym 'a' ) ( Sym 'b' ) )
---     onec = Seq nocs (Sym 'c')
---     evencs = Seq ( Rep ( Seq onec onec ) ) nocs
---     as = Alt (Sym 'a') (Rep (Sym 'a'))
---     bs = Alt (Sym 'b') (Rep (Sym 'b'))
 cases :: [Case]
 cases =
   [ Case {description = "empty", regex = Eps, sample = "", result = True}
-  , Case {description = "null", regex = Emp, sample = "", result = False}
   , Case {description = "char", regex = Sym 'a', sample = "a", result = True}
   , Case
       {description = "not char", regex = Sym 'a', sample = "b", result = False}
@@ -115,3 +136,5 @@ cases =
       , result = False
       }
   ]
+          
+  

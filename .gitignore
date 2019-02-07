@@ -26,3 +26,5 @@ dist-*
 **/*.rs.bk
 .stack-work/
 rust/**/target
+*.pyc
+*.pyo

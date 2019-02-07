@@ -61,16 +61,14 @@ the main algorithm divvied among the implementation sub-handlers.
 - [Rigged Kleene regular expressions in Haskell with Parse Forests](./haskell/06_RiggedRegex)
 - [Rigged Glushkov Regular Expressions in Haskell](./haskell/07_Rigged_Glushkov) (Section II.1b)
 - [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
+- [Rigged Brzozowski's Regular Expressions in Haskell](./haskell/05_RiggedBrz/)
+- [Rigged Brzozowski's Regular Expressions in Python](./python/)
 
 ## Todo
 
 - Section II.2 of the paper (Substring matching)
 - An abstraction of the Brzozowski algorithm, without an 'enum' dispatch type.
-- Rigged implementations of the Brzozowski's algorithm, in Haskell
 - Rigged implementations of the Brzozowski's algorithm, in Rust
-- An explanation for how Might & Adam's code is secretly a concrete (and
-naive?) implementation of Semirings, a result of their being more
-Lisp-minded than Haskell-minded.
 - An exploration of whether or not extended regular expressions (regular
 expressions supporting the Intersection, Negation, and Interleaf
 operations) is theoretically sound.
