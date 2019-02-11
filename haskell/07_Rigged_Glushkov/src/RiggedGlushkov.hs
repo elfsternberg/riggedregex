@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase        #-}
 
-module RiggedGlushkov ( Glu(..), accept, acceptg, rigged, riggeds ) where
+module RiggedGlushkov ( Glu(..), acceptg, rigged, riggeds ) where
 
 import           Data.Set hiding (foldl, split)
 
@@ -11,31 +11,6 @@ data Glu
   | Alt Glu Glu
   | Seq Glu Glu
   | Rep Glu
-
-shift :: Bool -> Glu -> Char -> Glu
-shift _ Eps _       = Eps
-shift m (Sym _ x) c = Sym (m && x == c) x
-shift m (Alt p q) c = Alt (shift m p c) (shift m q c)
-shift m (Seq p q) c = Seq (shift m p c) (shift (m && emptys p || final p) q c)
-shift m (Rep r) c   = Rep (shift (m || final r) r c)
-
-emptys :: Glu -> Bool
-emptys Eps       = True
-emptys (Sym _ _) = False
-emptys (Alt p q) = emptys p || emptys q
-emptys (Seq p q) = emptys p && emptys q
-emptys (Rep _)   = True
-
-final :: Glu -> Bool
-final Eps       = False
-final (Sym b _) = b
-final (Alt p q) = final p || final q
-final (Seq p q) = final p && emptys q || final q
-final (Rep r)   = final r
-
-accept :: Glu -> String -> Bool
-accept r []     = emptys r
-accept r (c:cs) = final (foldl (shift False) (shift True r c) cs)
 
 -- Just as with the Kleene versions, we're going to exploit the fact
 -- that we have a working version.  For Rust, we're going to do

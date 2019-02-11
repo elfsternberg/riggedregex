@@ -4,7 +4,7 @@
 import           Data.Foldable     (for_)
 import           Test.Hspec        (Spec, describe, it, shouldBe)
 import           Test.Hspec.Runner (configFastFail, defaultConfig, hspecWith)
-import           RiggedGlushkov    (Glu (..), accept, acceptg, rigged, riggeds)
+import           RiggedGlushkov    (Glu (..), acceptg, rigged, riggeds)
 import Data.Set
 import Data.List (sort)
 
@@ -24,11 +24,8 @@ specs = do
      let as = Alt (msym 'a') (Rep (msym 'a'))                  
      let bs = Alt (msym 'b') (Rep (msym 'b'))
 
-     it "simple expression" $
-        accept evencs "acc" `shouldBe` True
-
-     it "lifted expression" $
-        (acceptg (rigged evencs) "acc" :: Bool) `shouldBe` True
+--     it "lifted expression" $
+--        (acceptg (rigged evencs) "acc" :: Bool) `shouldBe` True
 
      it "lifted expression short" $
         (acceptg (rigged evencs) "acc" :: Int) `shouldBe` 1
