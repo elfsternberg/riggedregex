@@ -1,7 +1,5 @@
 # Kleene Regular Expressions with Rigging, in Rust
 
-# Kleene Regular Expressions with Rigging, in Haskell
-
 This program builds on the simple regular expressions in Version 01,
 provding a new definition of a regular expression `Regw` that takes two
 types, a source type and an output type.  The output type must be a
