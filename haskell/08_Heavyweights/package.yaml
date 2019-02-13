@@ -1,0 +1,29 @@
+name:                Heavyweights
+version:             0.1.0.0
+
+homepage:            https://github.com/elfsternberg/Heavyweights#readme
+license:             MPL-2.0
+license-file:        LICENSE.md
+author:              Elf M. Sternberg
+maintainer:          elf.sternberg@gmail.com
+copyright:           Copyright ⓒ 2019 Elf M. Sternberg
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+
+dependencies:
+  - base
+  - containers
+
+library:
+  exposed-modules: Heavyweights
+  ghc-options: -Wall
+  source-dirs: src
+
+tests:
+  test:
+    main: Tests.hs
+    source-dirs: test
+    dependencies:
+      - Heavyweights
+      - hspec
