@@ -63,11 +63,10 @@ the main algorithm divvied among the implementation sub-handlers.
 - [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
 - [Rigged Brzozowski's Regular Expressions in Haskell](./haskell/05_RiggedBrz/)
 - [Rigged Brzozowski's Regular Expressions in Python](./python/)
+- [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights)
 
 ## Todo
 
-- Section II.2 of the paper (Substring matching)
-- An abstraction of the Brzozowski algorithm, without an 'enum' dispatch type.
 - Rigged implementations of the Brzozowski's algorithm, in Rust
 - An exploration of whether or not extended regular expressions (regular
 expressions supporting the Intersection, Negation, and Interleaf
