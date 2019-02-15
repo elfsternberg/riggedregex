@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase        #-}
 
-module Heavyweights ( Reg(..), Glue, accept, rigged, riggeds, submatch, symi ) where
+module Heavyweights ( Reg(..), Glue, accept, rigged, riggeds, riggew, submatch, symi, altw, seqw, repw, LeftLong(..) ) where
 
 import           Data.Set hiding (foldl, split)
 
@@ -87,7 +87,7 @@ shift m (Repw r) c = repw (shift (m `add` final r) (glu r) c)
 sym :: (Semiring s, Eq c) => c -> Glue c s
 sym c = symw (\b -> if b == c then one else zero)
 
-rigging :: Semiring s => (Char -> Glue Char s) -> Reg -> Glue Char s
+rigging :: Semiring s => (Char -> Glue t s) -> Reg -> Glue t s
 rigging s =
   \case
     Eps -> epsw
@@ -141,6 +141,9 @@ symi c = symw weight
     where weight (pos, x) | x == c    = index pos
                           | otherwise = zero
 
+riggew :: Semiringi s => Reg -> Glue (Int, Char) s
+riggew = rigging symi         
+
 data Leftmost = NoLeft | Leftmost Start deriving (Show)
 data Start = NoStart | Start Int deriving (Show)
 
@@ -162,28 +165,26 @@ instance Semiring Leftmost where
 
 instance Semiringi Leftmost where
     index = Leftmost . Start
-                  
-data LeftLong = NoLeftLong | LeftLong Range deriving (Show)
-data Range = NoRange | Range Int Int deriving (Show)
+
+-- Leftlong Implementation!
+            
+data LeftLong = NoLeftLong | NoRange | Range Int Int deriving (Show, Eq)
 
 instance Semiring LeftLong where
     zero = NoLeftLong
-    one  = LeftLong NoRange
+    one  = NoRange
 
 -- The addition of two leftlongs is the selection
 -- of the longer of the two, provided there are
 -- two.
 
-    add NoLeftLong x = x
-    add x NoLeftLong = x
-    add (LeftLong x) (LeftLong y) = LeftLong (leftlong x y)
-        where
-          leftlong NoRange NoRange = NoRange
-          leftlong i NoRange       = i
-          leftlong NoRange i       = i
-          leftlong (Range i j) (Range k l)
-                  | i < k || i == k && j > l = Range i j
-                  | otherwise               = Range k l
+    add NoLeftLong x    = x
+    add x NoLeftLong    = x
+    add NoRange x       = x
+    add x NoRange       = x
+    add (Range i j) (Range k l)
+        | i < k || i == k && j > l = Range i j
+        | otherwise             = Range k l
 
 -- The multiplication of two leftlongs is the the longest possible
 -- range among the leftlongs provided; the zero is still annhilation,
@@ -192,12 +193,10 @@ instance Semiring LeftLong where
 
     mul NoLeftLong _ = NoLeftLong
     mul _ NoLeftLong = NoLeftLong
-    mul (LeftLong x) (LeftLong y) = LeftLong (range x y)
-        where
-          range NoRange i               = i
-          range i NoRange               = i
-          range (Range i _) (Range _ j) = Range i j
+    mul NoRange x    = x
+    mul x NoRange    = x
+    mul (Range i _) (Range _ l) = Range i l
 
 instance Semiringi LeftLong where
-    index i = LeftLong (Range i i)                                          
+    index i = Range i i                                        
                                               

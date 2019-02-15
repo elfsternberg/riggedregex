@@ -4,7 +4,7 @@
 import           Data.Foldable     (for_)
 import           Test.Hspec        (Spec, describe, it, shouldBe)
 import           Test.Hspec.Runner (configFastFail, defaultConfig, hspecWith)
-import           Heavyweights    (Reg (..), Glue, accept, rigged, riggeds)
+import           Heavyweights    (Reg (..), Glue, accept, rigged, riggeds, riggew, submatch, symi, altw, seqw, repw, LeftLong(..))
 import Data.Set
 import Data.List (sort)
 
@@ -41,7 +41,20 @@ specs = do
 
      it "parse forests" $
             (sort $ toList $ (accept (riggeds (Seq as bs)) "ab" :: Set String)) `shouldBe` ["ab"]
-                                                  
+
+     let aa = symi 'a'
+     let ab = repw (aa `altw` symi 'b')
+     let aaba = aa `seqw` ab `seqw` aa
+
+     it "submatch noleft" $
+        (submatch aaba "ab" :: LeftLong ) `shouldBe` NoLeftLong
+
+     it "submatch shortrange" $
+        (submatch aaba "aa" :: LeftLong ) `shouldBe` (Range 0 1)
+
+     it "submatch fullrange" $
+        (submatch aaba "bababa" :: LeftLong ) `shouldBe` (Range 1 5)
+                                                
      for_ cases test
         where
           test Case {..} = it description assertion
