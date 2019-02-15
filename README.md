@@ -54,16 +54,15 @@ Currently written:
 - [Glushkov construction of efficient Boolean regular expressions in Haskell](./haskell/04_Gluskov) (Section II.1a)
 - [Glushkov construction of efficient Boolean regular expressions in Rust](./rust/05_glushkov), (Section II.1a)
 - [Brzozowski's Boolean algorithm for regular expressions in Haskell](./haskell/03_Brzozowski)
-- [Brzozowski's Boolean algorithm for regular expressions in Rust](./rust/03_brzozowski_1), with the main
-algorithm in a central function.
-- [Brzozowski's Boolean algorithm for regular expressions, in Rust](./rust/03_brzozowski_2), with
-the main algorithm divvied among the implementation sub-handlers.
+- [Brzozowski's Boolean algorithm for regular expressions in Rust](./rust/03_brzozowski_1), with the main algorithm in a central function.
+- [Brzozowski's Boolean algorithm for regular expressions, in Rust](./rust/03_brzozowski_2), with the main algorithm divvied among the implementation sub-handlers.
 - [Rigged Kleene regular expressions in Haskell with Parse Forests](./haskell/06_RiggedRegex)
 - [Rigged Glushkov Regular Expressions in Haskell](./haskell/07_Rigged_Glushkov) (Section II.1b)
 - [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
 - [Rigged Brzozowski's Regular Expressions in Haskell](./haskell/05_RiggedBrz/)
 - [Rigged Brzozowski's Regular Expressions in Python](./python/)
-- [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights)
+- [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights) (Section II.2)
+- [The Heavyweight Experiments: Glushkov Regex in Rust with Disambiguation](./rust/07_heavyweights) (Section II.2)
 
 ## Todo
 
@@ -104,7 +103,10 @@ Might's "smart epsilons," but I haven't gotten there yet.
 
 ## LICENSE 
 
-The Rust code is Copyright [Elf M. Sternberg](https://elfsternberg.com) (c) 2019.
+With the exception of the Haskell code, everything in this file is
+Copyright [Elf M. Sternberg](https://elfsternberg.com) (c) 2019, and
+licensed with the Mozilla Public License vers. 2.0.  A copy of the
+license file is included in the root folder.
 
 The Haskell code as presented so far is straight from the paper and
 therefor belongs to Sebastian Fischer, Frank Huch, and Thomas Wilke.  In

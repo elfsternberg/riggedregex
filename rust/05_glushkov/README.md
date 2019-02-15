@@ -59,3 +59,9 @@ Porting this from Haskell was *much* more straightforward than porting
 the straight regex versions, and is slightly more efficient, although 
 it still has the "transition the entire parse tree every character" 
 problem.  That's to be solved later.
+
+## License
+
+As this is entirely my work, it is copyright (c) 2019, and licensed
+under the Mozilla Public License v. 2.0.  See the
+[LICENSE.md](../../LICENSE.md) in the root directory.

@@ -61,3 +61,9 @@ so our implementation involves building those tuples and then generating
 a new string by concatenating the orderded pair.  This takes a bit of
 memory thrashing, but much less now that I've solved the `mul(&x, &y)`
 issue.
+
+## License
+
+As this is entirely my work, it is copyright (c) 2019, and licensed
+under the Mozilla Public License v. 2.0.  See the
+[LICENSE.md](../../LICENSE.md) in the root directory.
