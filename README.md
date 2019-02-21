@@ -49,6 +49,7 @@ expression engines implemented.
 Currently written:
 - [Kleene Booleann regular expressions in Haskell](./haskell/01_SimpleRegex) (Section I.1)
 - [Kleene Boolean regular expressions in Rust](./rust/01_simpleregex) (Section I.1)
+- [Kleene Boolean regular expressions in Typescript](./node/) (Section I.1)
 - [Rigged Kleene regular expressions in Haskell](./haskell/02_RiggedRegex) (Section I.2)
 - [Rigged Kleene regular expressions in Rust](./rust/02_riggedregex) (Section I.2)
 - [Glushkov construction of efficient Boolean regular expressions in Haskell](./haskell/04_Gluskov) (Section II.1a)
@@ -92,14 +93,21 @@ recursively really shines in the definitions of `split` and `parts`,
 which are both three lines long in Haskell, but 21 and 29 lines long
 respectively, in Rust.
 
-The other thing is that the "Rigged Kleene regular expressions in
+<s>The other thing is that the "Rigged Kleene regular expressions in
 Haskell with Parse Forests" makes me unhappy; I don't have a good
-theoretical model for the change I made.  My expectation is that "one"
-here isn't just one, but also carries with it knowledge of what that
-"one-ness" means; the zero/one relationship sustains as far as the 
-poset is concerned, but the one value now carries knowledge the semiring
-needs to assemble the resulting parse forest.  This is similar to Matt
-Might's "smart epsilons," but I haven't gotten there yet.
+theoretical model for the change I made.</s> It turns out my theoretical
+model was just fine; I just didn't know or understand it sufficiently at
+the time.  The expectation is that yes, you can return an annihilator,
+or you can return a value.  The default value is "one," but the meaning
+of "one" can be whatever you want it to mean, so long as the Semiring
+laws hold for the definitions you invent.  In short, the value treats
+the zero and one as "annihilator" and "identity" operations against your
+return value.  When the value is primitive, such as in the Boolean or
+Integer case, all you need are the zero and one; when the value is
+compositional, you need the `mul` operator to do the dirty work for you.
+
+And then you remove the 'identity' pass because, well, the CPU doesn't
+need to waste time on that.
 
 ## LICENSE 
 
