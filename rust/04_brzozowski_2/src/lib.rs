@@ -1,24 +1,6 @@
 use std::ops::Deref;
 use std::rc::Rc;
 
-macro_rules! matches {
-    ($expression:expr, $($pattern:tt)+) => {
-        match $expression {
-            $($pattern)+ => true,
-            _ => false
-        }
-    }
-}
-
-macro_rules! cond {
-    ($($pred:expr => $body:block),+ ,_ => $default:block) => {
-        {
-            $(if $pred $body else)+
-            $default
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Emp;
 #[derive(Debug)]
@@ -94,11 +76,11 @@ impl Brznode for Sym {
 }
 
 pub fn alt(r1: &Rc<Brz>, r2: &Rc<Brz>) -> Rc<Brz> {
-    cond!(
-        matches!(r1.deref(), Brz::Emp(_)) => { r2.clone() },
-        matches!(r2.deref(), Brz::Emp(_)) => { r1.clone() },
-        _ => { Rc::new(Brz::Alt(Alt(r1.clone(), r2.clone()))) }
-    )
+    match (r1.deref(), r2.deref()) {
+        (_, Brz::Emp(_)) => r1.clone(),
+        (Brz::Emp(_), _) => r2.clone(),
+        _ => Rc::new(Brz::Alt(Alt(r1.clone(), r2.clone())))
+    }
 }
 
 impl Brznode for Alt {
@@ -111,11 +93,11 @@ impl Brznode for Alt {
 }    
 
 pub fn seq(r1: &Rc<Brz>, r2: &Rc<Brz>) -> Rc<Brz> {
-    cond!(
-        matches!(r1.deref(), Brz::Emp(_)) => { emp() },
-        matches!(r2.deref(), Brz::Emp(_)) => { emp() },
-        _ => { Rc::new(Brz::Seq(Seq(r1.clone(), r2.clone()))) }
-    )
+    match(r1.deref(), r2.deref()) {
+        (_, Brz::Emp(_)) => emp(),
+        (Brz::Emp(_), _) => emp(),
+        _ => Rc::new(Brz::Seq(Seq(r1.clone(), r2.clone())))
+    }
 }
 
 impl Brznode for Seq {
