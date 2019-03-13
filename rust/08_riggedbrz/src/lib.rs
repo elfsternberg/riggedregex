@@ -133,15 +133,15 @@ where
 pub fn parse<R, D, I>(r: &Rc<Brz<R, D>>, source: &mut I) -> R
 where
     R: Semiring + Clone,
-    I: Iterator<Item = D>
+    I: Iterator<Item = D>,
 {
     let start = if let Some(c) = source.next() {
         derive(&r, &c)
     } else {
-        return parsenull(r)
+        return parsenull(r);
     };
 
-    let innerderive = |b, c| { derive(&b, &c) };
+    let innerderive = |b, c| derive(&b, &c);
     parsenull(&source.fold(start, innerderive))
 }
 
@@ -236,294 +236,289 @@ mod tests {
             assert_eq!(parse(&case, &mut sample.to_string().chars()).0, *result);
         }
     }
+
+    //   _         __ _   _                __   __    _ _    _
+    //  | |   ___ / _| |_| |___ _ _  __ _  \ \ / /_ _| (_)__| |
+    //  | |__/ -_)  _|  _| / _ \ ' \/ _` |  \ V / _` | | / _` |
+    //  |____\___|_|  \__|_\___/_||_\__, |   \_/\__,_|_|_\__,_|
+    //                              |___/
+
+    #[test]
+    fn assert_leftlong_tests_valid() {
+        pub struct AnySym {};
+
+        impl Sym<Recognizer, char> for AnySym {
+            fn is(&self, _: &char) -> Recognizer {
+                return { Recognizer::one() };
+            }
+        }
+
+        pub fn sym(sample: char) -> Rc<Brz<Recognizer, char>> {
+            Rc::new(Brz::Sym(Rc::new(SimpleSym { c: sample })))
+        }
+
+        pub fn asy() -> Rc<Brz<Recognizer, char>> {
+            Rc::new(Brz::Sym(Rc::new(AnySym {})))
+        }
+
+        let any = rep(&asy());
+        let a = sym('a');
+        let ab = rep(&alt(&a, &sym('b')));
+        let aaba = seq(&seq(&a, &ab), &a);
+
+        let cases = [
+            ("any", &seq(&any, &sym('c')), "cbcdc", true),
+            ("leftlong sample zero", &aaba, "ab", false),
+            ("leftlong sample five", &aaba, "bababa", true),
+            ("leftlong sample one", &aaba, "aa", true),
+        ];
+
+        for (name, case, sample, result) in &cases {
+            println!("{:?}", name);
+            let arb = seq(&any, &seq(&case, &any));
+            assert_eq!(parse(&arb, &mut sample.to_string().chars()).0, *result);
+        }
+    }
+
+    //  _         __ _   _
+    // | |   ___ / _| |_| |___ _ _  __ _
+    // | |__/ -_)  _|  _| / _ \ ' \/ _` |
+    // |____\___|_|  \__|_\___/_||_\__, |
+    //                             |___/
+
+    // The semiring and semiring_i implementations for the LeftLong
+    // Range operations.
+
+    pub trait Semiringi<S: Semiring> {
+        fn index(i: usize) -> S;
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    pub enum Leftlong {
+        Notfound,            // Zero
+        Scanning,            // One
+        Found(usize, usize), // The set of useful datapoints
+    }
+
+    impl Semiring for Leftlong {
+        fn one() -> Leftlong {
+            Leftlong::Scanning
+        }
+        fn zero() -> Leftlong {
+            Leftlong::Notfound
+        }
+        fn is_zero(&self) -> bool {
+            match self {
+                Leftlong::Notfound => true,
+                _ => false,
+            }
+        }
+
+        fn add(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
+            use self::Leftlong::*;
+            match (self, rhs) {
+                (Notfound, c) | (c, Notfound) | (Scanning, c) | (c, Scanning) => c.clone(),
+                (Found(i, j), Found(k, l)) => {
+                    if i < k || i == k && j >= l {
+                        self.clone()
+                    } else {
+                        rhs.clone()
+                    }
+                }
+            }
+        }
+
+        fn mul(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
+            use self::Leftlong::*;
+            match (self, rhs) {
+                (Notfound, _) | (_, Notfound) => Leftlong::zero(),
+                (Scanning, c) | (c, Scanning) => c.clone(),
+                (Found(i, _), Found(_, l)) => Leftlong::Found(*i, *l),
+            }
+        }
+    }
+
+    impl Semiringi<Leftlong> for Leftlong {
+        fn index(i: usize) -> Leftlong {
+            Leftlong::Found(i, i)
+        }
+    }
+
+    // The position and character being analyzed.
+
+    pub struct Pc(usize, char);
+
+    #[derive(Clone)]
+    pub struct RangeSym(char);
+
+    impl Sym<Leftlong, Pc> for RangeSym {
+        fn is(&self, pc: &Pc) -> Leftlong {
+            if pc.1 == self.0 {
+                Leftlong::index(pc.0)
+            } else {
+                Leftlong::zero()
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AnySym {}
+    impl Sym<Leftlong, Pc> for AnySym {
+        fn is(&self, _: &Pc) -> Leftlong {
+            Leftlong::one()
+        }
+    }
+
+    #[test]
+    fn leftlong_basics() {
+        pub fn asym() -> Rc<Brz<Leftlong, Pc>> {
+            Rc::new(Brz::Sym(Rc::new(AnySym {})))
+        }
+
+        pub fn symi(sample: char) -> Rc<Brz<Leftlong, Pc>> {
+            Rc::new(Brz::Sym(Rc::new(RangeSym(sample))))
+        }
+
+        let a = symi('a');
+        let ab = rep(&alt(&a.clone(), &symi('b')));
+        let aaba = seq(&a.clone(), &seq(&ab, &a.clone()));
+
+        let cases = [
+            ("leftlong zero", &aaba.clone(), "ab", Leftlong::Notfound),
+            ("leftlong one", &aaba.clone(), "aa", Leftlong::Found(0, 1)),
+            (
+                "leftlong five",
+                &aaba.clone(),
+                "bababa",
+                Leftlong::Found(1, 5),
+            ),
+        ];
+
+        for (name, case, sample, result) in &cases {
+            println!("{:?}", name);
+            let any = rep(&asym());
+            let arb = seq(&any, &seq(&case, &any));
+            let ret = parse(
+                &arb,
+                &mut sample
+                    .to_string()
+                    .chars()
+                    .into_iter()
+                    .enumerate()
+                    .map(|c| Pc(c.0, c.1)),
+            );
+            assert_eq!(result, &ret);
+        }
+    }
+
+    //   ___
+    //   | _ \__ _ _ _ ___ ___
+    //   |  _/ _` | '_(_-</ -_)
+    //   |_| \__,_|_| /__/\___|
     //
-    //     //  _         __ _   _                __   __    _ _    _
-    //     // | |   ___ / _| |_| |___ _ _  __ _  \ \ / /_ _| (_)__| |
-    //     // | |__/ -_)  _|  _| / _ \ ' \/ _` |  \ V / _` | | / _` |
-    //     // |____\___|_|  \__|_\___/_||_\__, |   \_/\__,_|_|_\__,_|
-    //     //                             |___/
     //
-    //     #[test]
-    //     fn assert_leftlong_tests_valid() {
-    //         pub struct AnySym {};
-    //         impl Sym<Recognizer, char> for AnySym {
-    //             fn is(&self, _: &char) -> Recognizer {
-    //                 return { Recognizer::one() };
-    //             }
-    //         }
-    //
-    //         pub fn sym(sample: char) -> Rc<Brz<Recognizer, char>> {
-    //             Rc::new(Brz(
-    //                 Recognizer::zero(),
-    //                 Recognizer::zero(),
-    //                 Brzi::Sym(Rc::new(SimpleSym { c: sample })),
-    //             ))
-    //         }
-    //
-    //         pub fn asy() -> Rc<Brz<Recognizer, char>> {
-    //             Rc::new(Brz(
-    //                 Recognizer::zero(),
-    //                 Recognizer::zero(),
-    //                 Brzi::Sym(Rc::new(AnySym {})),
-    //             ))
-    //         }
-    //
-    //         let any = rep(&asy());
-    //         let a = sym('a');
-    //         let ab = rep(&alt(&a, &sym('b')));
-    //         let aaba = seq(&seq(&a, &ab), &a);
-    //
-    //         let cases = [
-    //             ("any", &seq(&any, &sym('c')), "cbcdc", true),
-    //             ("leftlong sample zero", &aaba, "ab", false),
-    //             ("leftlong sample five", &aaba, "bababa", true),
-    //             ("leftlong sample one", &aaba, "aa", true),
-    //         ];
-    //
-    //         for (name, case, sample, result) in &cases {
-    //             println!("{:?}", name);
-    //             let arb = seq(&any, &seq(&case, &any));
-    //             assert_eq!(accept(&arb, &mut sample.to_string().chars()).0, *result);
-    //         }
-    //     }
-    //
-    //     //  ___
-    //     // | _ \__ _ _ _ ___ ___
-    //     // |  _/ _` | '_(_-</ -_)
-    //     // |_| \__,_|_| /__/\___|
-    //     //
-    //
-    //     #[derive(Debug, Clone, PartialEq)]
-    //     pub struct Parser(HashSet<String>);
-    //
-    //     impl Semiring for Parser {
-    //         fn one() -> Parser {
-    //             Parser(set!["".to_string()])
-    //         }
-    //         fn zero() -> Parser {
-    //             Parser(set![])
-    //         }
-    //         fn is_zero(&self) -> bool {
-    //             self.0.len() == 0
-    //         }
-    //         fn mul(self: &Parser, rhs: &Parser) -> Parser {
-    //             let mut temp = set![];
-    //             for i in self.0.iter().cloned() {
-    //                 for j in &rhs.0 {
-    //                     temp.insert(i.clone() + &j);
-    //                 }
-    //             }
-    //             Parser(temp)
-    //         }
-    //         fn add(self: &Parser, rhs: &Parser) -> Parser {
-    //             Parser(self.0.union(&rhs.0).cloned().collect())
-    //         }
-    //     }
-    //
-    //     pub struct ParserSym {
-    //         c: char,
-    //     }
-    //
-    //     impl Sym<Parser, char> for ParserSym {
-    //         fn is(&self, c: &char) -> Parser {
-    //             if *c == self.c {
-    //                 Parser(set![c.to_string()])
-    //             } else {
-    //                 Parser::zero()
-    //             }
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn string_basics() {
-    //         pub fn sym(sample: char) -> Rc<Brz<Parser, char>> {
-    //             Rc::new(Brz(
-    //                 Parser::zero(),
-    //                 Parser::zero(),
-    //                 Brzi::Sym(Rc::new(ParserSym { c: sample })),
-    //             ))
-    //         }
-    //
-    //         let cases = [
-    //             ("empty", eps(), "", Some("")),
-    //             ("char", sym('a'), "a", Some("a")),
-    //             ("not char", sym('a'), "b", None),
-    //             ("char vs empty", sym('a'), "", None),
-    //             ("left alt", alt(&sym('a'), &sym('b')), "a", Some("a")),
-    //             ("right alt", alt(&sym('a'), &sym('b')), "b", Some("b")),
-    //             ("neither alt", alt(&sym('a'), &sym('b')), "c", None),
-    //             ("empty alt", alt(&sym('a'), &sym('b')), "", None),
-    //             ("empty rep", rep(&sym('a')), "", Some("")),
-    //             ("sequence", seq(&sym('a'), &sym('b')), "ab", Some("ab")),
-    //             ("sequence with empty", seq(&sym('a'), &sym('b')), "", None),
-    //             ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", None),
-    //             ("bad short sequence", seq(&sym('a'), &sym('b')), "a", None),
-    //             ("one rep", rep(&sym('a')), "a", Some("a")),
-    //             ("short multiple failed rep", rep(&sym('a')), "ab", None),
-    //             (
-    //                 "multiple rep",
-    //                 rep(&sym('a')),
-    //                 "aaaaaaaaa",
-    //                 Some("aaaaaaaaa"),
-    //             ),
-    //             (
-    //                 "multiple rep with failure",
-    //                 rep(&sym('a')),
-    //                 "aaaaaaaaab",
-    //                 None,
-    //             ),
-    //         ];
-    //
-    //         for (name, case, sample, result) in &cases {
-    //             println!("{:?}", name);
-    //             let ret = accept(case, &mut sample.to_string().chars()).0;
-    //             match result {
-    //                 Some(r) => {
-    //                     let v = ret.iter().next();
-    //                     if let Some(s) = v {
-    //                         assert_eq!(s, sample);
-    //                     } else {
-    //                         panic!("Strings did not match: {:?}, {:?}", r, v);
-    //                     }
-    //                     assert_eq!(1, ret.len());
-    //                 }
-    //                 None => assert_eq!(0, ret.len()),
-    //             }
-    //         }
-    //     }
-    //
-    //     //  _         __ _   _
-    //     // | |   ___ / _| |_| |___ _ _  __ _
-    //     // | |__/ -_)  _|  _| / _ \ ' \/ _` |
-    //     // |____\___|_|  \__|_\___/_||_\__, |
-    //     //                             |___/
-    //
-    //     // The semiring and semiring_i implementations for the LeftLong
-    //     // Range operations.
-    //
-    //     pub trait Semiringi<S: Semiring> {
-    //         fn index(i: usize) -> S;
-    //     }
-    //
-    //     #[derive(Debug, Clone, Eq, PartialEq)]
-    //     pub enum Leftlong {
-    //         Notfound,            // Zero
-    //         Scanning,            // One
-    //         Found(usize, usize), // The set of useful datapoints
-    //     }
-    //
-    //     impl Semiring for Leftlong {
-    //         fn one() -> Leftlong {
-    //             Leftlong::Scanning
-    //         }
-    //         fn zero() -> Leftlong {
-    //             Leftlong::Notfound
-    //         }
-    //         fn is_zero(&self) -> bool {
-    //             matches!(self, Leftlong::Notfound)
-    //         }
-    //         fn add(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
-    //             use self::Leftlong::*;
-    //             match (self, rhs) {
-    //                 (Notfound, c) | (c, Notfound) | (Scanning, c) | (c, Scanning) => c.clone(),
-    //                 (Found(i, j), Found(k, l)) => {
-    //                     if i < k || i == k && j >= l {
-    //                         self.clone()
-    //                     } else {
-    //                         rhs.clone()
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //
-    //         fn mul(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
-    //             use self::Leftlong::*;
-    //             match (self, rhs) {
-    //                 (Notfound, _) | (_, Notfound) => Leftlong::zero(),
-    //                 (Scanning, c) | (c, Scanning) => c.clone(),
-    //                 (Found(i, _), Found(_, l)) => Leftlong::Found(*i, *l),
-    //             }
-    //         }
-    //     }
-    //
-    //     impl Semiringi<Leftlong> for Leftlong {
-    //         fn index(i: usize) -> Leftlong {
-    //             Leftlong::Found(i, i)
-    //         }
-    //     }
-    //
-    //     // The position and character being analyzed.
-    //
-    //     pub struct Pc(usize, char);
-    //
-    //     #[derive(Clone)]
-    //     pub struct RangeSym(char);
-    //
-    //     impl Sym<Leftlong, Pc> for RangeSym {
-    //         fn is(&self, pc: &Pc) -> Leftlong {
-    //             if pc.1 == self.0 {
-    //                 Leftlong::index(pc.0)
-    //             } else {
-    //                 Leftlong::zero()
-    //             }
-    //         }
-    //     }
-    //
-    //     #[derive(Debug, Clone)]
-    //     pub struct AnySym {}
-    //     impl Sym<Leftlong, Pc> for AnySym {
-    //         fn is(&self, _: &Pc) -> Leftlong {
-    //             Leftlong::one()
-    //         }
-    //     }
-    //
-    //     pub fn asym() -> Rc<Brz<Leftlong, Pc>> {
-    //         Rc::new(Brz(
-    //             Leftlong::zero(),
-    //             Leftlong::zero(),
-    //             Brzi::Sym(Rc::new(AnySym {})),
-    //         ))
-    //     }
-    //
-    //     #[test]
-    //     fn leftlong_basics() {
-    //         pub fn symi(sample: char) -> Rc<Brz<Leftlong, Pc>> {
-    //             Rc::new(Brz(
-    //                 Leftlong::zero(),
-    //                 Leftlong::zero(),
-    //                 Brzi::Sym(Rc::new(RangeSym(sample))),
-    //             ))
-    //         }
-    //
-    //         let a = symi('a');
-    //         let ab = rep(&alt(&a.clone(), &symi('b')));
-    //         let aaba = seq(&a.clone(), &seq(&ab, &a.clone()));
-    //
-    //         let cases = [
-    //             ("leftlong zero", &aaba.clone(), "ab", Leftlong::Notfound),
-    //             ("leftlong one", &aaba.clone(), "aa", Leftlong::Found(0, 1)),
-    //             (
-    //                 "leftlong five",
-    //                 &aaba.clone(),
-    //                 "bababa",
-    //                 Leftlong::Found(1, 5),
-    //             ),
-    //         ];
-    //
-    //         for (name, case, sample, result) in &cases {
-    //             println!("{:?}", name);
-    //             let any = rep(&asym());
-    //             let arb = seq(&any, &seq(&case, &any));
-    //             let ret = accept(
-    //                 &arb,
-    //                 &mut sample
-    //                     .to_string()
-    //                     .chars()
-    //                     .into_iter()
-    //                     .enumerate()
-    //                     .map(|c| Pc(c.0, c.1)),
-    //             );
-    //             assert_eq!(result, &ret);
-    //         }
-    //     }
+
+    macro_rules! set {
+        ( $( $x:expr ),* ) => {{
+            #[allow(unused_mut)]
+            let mut temp_set = HashSet::new();
+            $( temp_set.insert($x); )*
+                temp_set //
+        }};
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Parser(HashSet<String>);
+
+    impl Semiring for Parser {
+        fn one() -> Parser {
+            Parser(set!["".to_string()])
+        }
+        fn zero() -> Parser {
+            Parser(set![])
+        }
+        fn is_zero(&self) -> bool {
+            self.0.len() == 0
+        }
+        fn mul(self: &Parser, rhs: &Parser) -> Parser {
+            let mut temp = set![];
+            for i in self.0.iter().cloned() {
+                for j in &rhs.0 {
+                    temp.insert(i.clone() + &j);
+                }
+            }
+            Parser(temp)
+        }
+        fn add(self: &Parser, rhs: &Parser) -> Parser {
+            Parser(self.0.union(&rhs.0).cloned().collect())
+        }
+    }
+
+    pub struct ParserSym {
+        c: char,
+    }
+
+    impl Sym<Parser, char> for ParserSym {
+        fn is(&self, c: &char) -> Parser {
+            if *c == self.c {
+                Parser(set![c.to_string()])
+            } else {
+                Parser::zero()
+            }
+        }
+    }
+
+    #[test]
+    fn string_basics() {
+        pub fn sym(sample: char) -> Rc<Brz<Parser, char>> {
+            Rc::new(Brz::Sym(Rc::new(ParserSym { c: sample })))
+        }
+
+        let cases = [
+            ("char", sym('a'), "a", Some("a")),
+            ("not char", sym('a'), "b", None),
+            ("char vs empty", sym('a'), "", None),
+            ("left alt", alt(&sym('a'), &sym('b')), "a", Some("a")),
+            ("right alt", alt(&sym('a'), &sym('b')), "b", Some("b")),
+            ("neither alt", alt(&sym('a'), &sym('b')), "c", None),
+            ("empty alt", alt(&sym('a'), &sym('b')), "", None),
+            ("empty rep", rep(&sym('a')), "", Some("")),
+            ("sequence", seq(&sym('a'), &sym('b')), "ab", Some("ab")),
+            ("sequence with empty", seq(&sym('a'), &sym('b')), "", None),
+            ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", None),
+            ("bad short sequence", seq(&sym('a'), &sym('b')), "a", None),
+            ("one rep", rep(&sym('a')), "a", Some("a")),
+            ("short multiple failed rep", rep(&sym('a')), "ab", None),
+            (
+                "multiple rep",
+                rep(&sym('a')),
+                "aaaaaaaaa",
+                Some("aaaaaaaaa"),
+            ),
+            (
+                "multiple rep with failure",
+                rep(&sym('a')),
+                "aaaaaaaaab",
+                None,
+            ),
+        ];
+
+        for (name, case, sample, result) in &cases {
+            println!("{:?}", name);
+            let ret = parse(case, &mut sample.to_string().chars()).0;
+            match result {
+                Some(r) => {
+                    let v = ret.iter().next();
+                    if let Some(s) = v {
+                        assert_eq!(s, sample);
+                    } else {
+                        panic!("Strings did not match: {:?}, {:?}", r, v);
+                    }
+                    assert_eq!(1, ret.len());
+                }
+                None => assert_eq!(0, ret.len()),
+            }
+        }
+    }
+
 }
