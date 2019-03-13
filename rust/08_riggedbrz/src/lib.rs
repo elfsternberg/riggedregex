@@ -150,15 +150,6 @@ mod tests {
 
     use super::*;
 
-    //     macro_rules! set {
-    //         ( $( $x:expr ),* ) => {{
-    //                 #[allow(unused_mut)]
-    //                 let mut temp_set = HashSet::new();
-    //                 $( temp_set.insert($x); )*
-    //                 temp_set //
-    //             }};
-    //     }
-
     //  ___                       _
     // | _ \___ __ ___  __ _ _ _ (_)______
     // |   / -_) _/ _ \/ _` | ' \| |_ / -_)
