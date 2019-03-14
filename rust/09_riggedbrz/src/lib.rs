@@ -393,7 +393,8 @@ mod tests {
         let a = symi('a');
         let ab = rep(&alt(&a.clone(), &symi('b')));
         let aaba = seq(&a.clone(), &seq(&ab, &a.clone()));
-
+        // /a(ab)*a/
+        
         let cases = [
             ("leftlong zero", &aaba.clone(), "ab", Leftlong::Notfound),
             ("leftlong one", &aaba.clone(), "aa", Leftlong::Found(0, 1)),

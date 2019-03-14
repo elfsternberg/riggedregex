@@ -9,7 +9,6 @@ Sym = namedtuple("Sym", ["c"])
 Alt = namedtuple("Alt", ["l", "r"])
 Seq = namedtuple("Seq", ["l", "r"])
 Rep = namedtuple("Rep", ["r"])
-Del = namedtuple("Del", ["r"])
 
 cname = re.compile(r'^(\w+)\(')
 
@@ -36,8 +35,9 @@ def derive(r, c):
         return Alt(l1, r1)
 
     def seq(r, c):
-        return Alt(Seq(derive(r.l, c), r.r),
-                   Seq(Del(r.l), derive(r.r, c)))
+        if nullable(r.l):
+            return Alt(Seq(derive(r.l, c), r.r), derive(r.r, c))
+        return Seq(derive(r.l, c), r.r)
 
     def rep(r, c):
         return Seq(derive(r.r, c), r)
@@ -48,7 +48,6 @@ def derive(r, c):
     nextfn = {
         "Emp": emp,
         "Eps": emp,
-        "Del": emp,
         "Sym": sym,
         "Alt": alt,
         "Seq": seq,
@@ -57,6 +56,22 @@ def derive(r, c):
 
     return nextfn(r, c)
 
+def nullable(r):
+    def zer(r): return False
+    def one(r): return True
+    def alt(r): return nullable(r.l) or nullable(r.r)
+    def seq(r): return nullable(r.l) and nullable(r.r)
+
+    nextfn = {
+        "Emp": zer,
+        "Sym": zer,
+        "Rep": one,
+        "Eps": one,
+        "Alt": alt,
+        "Seq": seq
+    }.get(cn(r))
+
+    return nextfn(r)
 
 def parsenull(r):
     """ Extract the generated parse forest from the residual regular expression."""
@@ -73,13 +88,10 @@ def parsenull(r):
                             for j in parsenull(r.r)
                             for i in parsenull(r.l)])
 
-    def one(r): return parsenull(r.r)
-
     nextfn = {
         "Emp": emp,
         "Sym": emp,
         "Rep": sym,
-        "Del": one,
         "Eps": eps,
         "Alt": alt,
         "Seq": seq
@@ -99,15 +111,13 @@ def parse(r, s):
 
 
 if __name__ == '__main__':
-    nocs = Rep(Alt(Sym('a'), (Sym('b'))))
-    onec = Seq(nocs, Sym('c'))
-    evencs = Seq(Rep(Seq(onec, onec)), nocs)
-
-    aas = Alt(Sym('a'), Rep(Sym('a')))
-    bbs = Alt(Sym('b'), Rep(Sym('b')))
-    
-
-    # print(parse(evencs, "acc"))
+#    nocs = Rep(Alt(Sym('a'), (Sym('b'))))
+#    onec = Seq(nocs, Sym('c'))
+#    evencs = Seq(Rep(Seq(onec, onec)), nocs)
+#
+#    aas = Alt(Sym('a'), Rep(Sym('a')))
+#    bbs = Alt(Sym('b'), Rep(Sym('b')))
+#
 
     sym = Seq(Sym('a'), Seq(Rep(Sym('b')), Sym('c')))
     parse(sym, "ac")
