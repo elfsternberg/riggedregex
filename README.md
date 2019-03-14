@@ -6,18 +6,18 @@
 
 # Rigged Regular Expressions
 
-The two code branches contain versions of Weighted Regular Expression as
-described in the paper *A Play on Regular Expressions: A Functional
-Pearl*
+The two main code branches, the `rust` and `haskell` branches, contain
+versions of Weighted Regular Expression as described in the paper *A
+Play on Regular Expressions: A Functional Pearl*
 ([paper](http://sebfisch.github.io/haskell-regexp/regexp-play.pdf),
 [slides](http://sebfisch.github.io/haskell-regexp/regexp-talk.pdf)), by
-Sebastian Fischer, Frank Huch, and Thomas Wilke.  The Haskell version is
-faithful to the paper, and is more or less what's presented in the
-paper, entered by hand (as that's pretty much the only way anything gets
-into my brain these days).  The Rust version is a port of the Haskell
-version, inefficiencies and all, in order to see what it takes to take
-academic results and reimplement them in what is presented as a
-"systems" language.
+Sebastian Fischer, Frank Huch, and Thomas Wilke.  The early Haskell
+versions are faithful to the paper, and are more or less what's
+presented in the paper, entered by hand (as that's pretty much the only
+way anything gets into my brain these days).  The Rust versions are a
+ports of the Haskell version, inefficiencies and all, in order to see
+what it takes to take academic results and reimplement them in what is
+presented as a "systems" language.
 
 The paper uses the term "weighted" to describe the post-processing they
 do with an algebraic construct known as a
@@ -29,7 +29,7 @@ I'm using the word "rig" as it's shorter; a semiring is related to the
 algebraic construct called a "ring," but cannot handle **n**egative
 elements, and so... a "rig."
 
-I'm hip to the idea of [Fritz Henglein's
+I'm interested in the ideas of [Fritz Henglein's
 dream](http://www.cs.ox.ac.uk/ralf.hinze/WG2.8/27/slides/fritz.pdf) of
 extracting all possible parsing information via a catamorphism over the
 parse tree, and that's exactly what semiring does.  I'm evaluating the
@@ -37,6 +37,45 @@ use of the semiring over [Might's parser combinator
 approach](http://matt.might.net/papers/might2011derivatives.pdf) to see
 which is easier to implement and provides the most bang for the buck. So
 having regular expressions "rigged" just seemed like the right term.
+
+Later implementations in both branches apply the *Play* strategies to
+Brzozowski's "derivatives of regular expressions" algorithm, and
+demonstrates that the results hold.  
+
+**This proves what I set out to show**, that [Goodman's 1979 paper on
+Semiring Parsing](http://www.aclweb.org/anthology/J99-4004) and
+[Brzozowski's Parsing With
+Derivatives](http://www.ccs.neu.edu/home/turon/re-deriv.pdf) are
+compatible, and that these results are expressible in a strongly typed
+systems language like [Rust](https://www.rust-lang.org/).
+
+Primary mission accomplished.
+
+## Secondary mission
+
+While the primary goal is complete, the entirety of the project is not.
+There are several things left until I consider this project done.  They
+are:
+
+- Implement *recursive* regular expressions
+- Apply the [equational optimizations](https://arxiv.org/pdf/1604.04695.pdf) for efficiency.
+- Supply an *aggregating semiring* so that multiple and correlative
+semantic extractions can happen at the same time.
+- Supply Adams's [LoL: Language of
+Languages](https://bitbucket.org/ucombinator/derp-3/src/86bca8a720231e010a3ad6aefd1aa1c0f35cbf6b/src/derp.rkt?at=master&fileviewer=file-view-default#derp.rkt-489)
+as an interface layer to a richer parsing experience.
+
+These are probably separate projects, as they're specific meta-syntactic
+wrappers around the final version:
+
+- Use the semiring implementation to provide a
+[PEG](https://arxiv.org/abs/1801.10490) engine
+- Use the PEG to provide [Rosie in Rust](https://rosie-lang.org/about/)
+
+And then there's a reality that [Russ
+Cox](https://swtch.com/~rsc/regexp/regexp1.html) and [Geoff
+Langdale](https://branchfree.org/2019/02/28/paper-hyperscan-a-fast-multi-pattern-regex-matcher-for-modern-cpus/)
+are so far ahead of me that it's not even funny.
 
 ## Status
 
@@ -62,25 +101,25 @@ Currently written:
 - [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
 - [Rigged Brzozowski's Regular Expressions in Haskell](./haskell/05_RiggedBrz/)
 - [Rigged Brzozowski's Regular Expressions in Python](./python/)
+- [Rigged Brzozowski's Regular Expressions in **Rust**](./rust/08_riggedbrz/)
 - [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights) (Section II.2)
 - [The Heavyweight Experiments: Glushkov Regex in Rust with Disambiguation](./rust/07_heavyweights) (Section II.2)
 
 ## Todo
 
-- Rigged implementations of the Brzozowski's algorithm, in Rust
 - An exploration of whether or not extended regular expressions (regular
 expressions supporting the Intersection, Negation, and Interleaf
 operations) is theoretically sound.
 - An implementation of a Rigged Brzozowski Algorithm with Adams's and
 Darais's optimizations.
 - An implementation of a Rigged Brzozowski Algorithm with Might's
-recursion enabled, using Darais's laziness as its basis.
+recursion enabled, using Adams's laziness as its basis.
 
 ## Lessons learned
 
 A major goal for this exercise is to illustrate the challenges, and
-perhaps impossibilities, of porting idiomatic Haskell to idiomatic
-Rust.  The regular expressions being built are static and compiled at
+perhaps impossibilities, of porting idiomatic Haskell to idiomatic Rust.
+The regular expressions being built are static and compiled at
 compile-time with the rest of the code.
 
 The best thing I've learned is that many Haskell idioms do port over
@@ -111,17 +150,12 @@ need to waste time on that.
 
 ## LICENSE 
 
-With the exception of the Haskell code, everything in this file is
-Copyright [Elf M. Sternberg](https://elfsternberg.com) (c) 2019, and
-licensed with the Mozilla Public License vers. 2.0.  A copy of the
-license file is included in the root folder.
+The Haskell code in Haskell Experiments 01, 02, and 04 is straight from
+the *Play* paper and therefor belongs to Sebastian Fischer, Frank Huch,
+and Thomas Wilke.  The code in Haskell Experiments 07 and 08 take the
+fragments offered in the same paper and realize them as full-blown
+recognizers and parsers.
 
-The Haskell code as presented so far is straight from the paper and
-therefor belongs to Sebastian Fischer, Frank Huch, and Thomas Wilke.  In
-the event that I choose an alternative DFA constructor (and I probably
-will, because they use [Glushkov's
-Construction](https://en.wikipedia.org/wiki/Glushkov%27s_construction_algorithm),
-and I'm trying to use [Brzozowski's
-Algorithm](https://en.wikipedia.org/wiki/Brzozowski_derivative#Derivative_of_a_regular_expression)),
-the files will be annotated to indicate which is which.
-
+All other code is Copyright [Elf M. Sternberg](https://elfsternberg.com)
+(c) 2019, and licensed with the Mozilla Public License vers. 2.0.  A
+copy of the license file is included in the root folder.
