@@ -101,9 +101,9 @@ Currently written:
 - [Rigged Glushkov Regular Expressions in Rust](./rust/06_riggedglushkov) (Section II.1b)
 - [Rigged Brzozowski's Regular Expressions in Haskell](./haskell/05_RiggedBrz/)
 - [Rigged Brzozowski's Regular Expressions in Python](./python/)
-- [Rigged Brzozowski's Regular Expressions in **Rust**](./rust/08_riggedbrz/)
 - [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights) (Section II.2)
 - [The Heavyweight Experiments: Glushkov Regex in Rust with Disambiguation](./rust/07_heavyweights) (Section II.2)
+- [The Final Experiment: Rigged Brzozowski's Regular Expressions in **Rust**](./rust/08_riggedbrz/)
 
 ## Todo
 
