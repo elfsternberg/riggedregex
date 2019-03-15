@@ -7,7 +7,7 @@
 #[allow(unused_imports)]
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 
 // Generic type conventions:
 //   R: Our Ring Type
@@ -36,69 +36,99 @@ where
     Emp,
     Eps(R),
     Sym(Rc<Sym<R, D>>),
-    Del(Rc<RefCell<Brz<R, D>>>),
-    Alt(Rc<RefCell<Brz<R, D>>>, Rc<RefCell<Brz<R, D>>>),
-    Seq(Rc<RefCell<Brz<R, D>>>, Rc<RefCell<Brz<R, D>>>),
-    Rep(Rc<RefCell<Brz<R, D>>>),
+    Del(Brzi<R, D>),
+    Alt(Brzi<R, D>, Brzi<R, D>),
+    Seq(Brzi<R, D>, Brzi<R, D>),
+    Rep(Brzi<R, D>),
 }
 
-pub fn emp<R, D>() -> Rc<RefCell<Brz<R, D>>>
+pub struct Brzi<R: Semiring, D>(Rc<RefCell<Brz<R, D>>>, *const Brz<R, D>);
+
+impl<R: Semiring, D> Brzi<R, D>
+{
+    pub fn new(b: Brz<R, D>) -> Brzi<R, D> {
+        let r = Rc::new(RefCell::new(b));
+        let p = r.as_ptr();
+        Brzi(r, p)
+    }
+
+    pub fn borrow(&self) -> Ref<Brz<R, D>> {
+        self.0.borrow()
+    }
+
+    pub fn replace(&mut self, b: Brz<R, D>) {
+        self.0.replace(b);
+    }
+
+    pub fn clone(&self) -> Brzi<R, D> {
+        Brzi(self.0.clone(), self.1)
+    }
+}
+
+pub fn emp<R, D>() -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Rc::new(RefCell::new(Brz::Emp))
+    Brzi::new(Brz::Emp)
 }
 
-pub fn eps<R, D>(e: R) -> Rc<RefCell<Brz<R, D>>>
+pub fn eps<R, D>(e: R) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Rc::new(RefCell::new(Brz::Eps(e)))
+    Brzi::new(Brz::Eps(e))
 }
 
-pub fn alt<R, D>(r1: &Rc<RefCell<Brz<R, D>>>, r2: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn set_eps<R, D>(target: &mut Brzi<R, D>, e: R)
 where
     R: Semiring,
 {
-    match (&*(**r1).borrow(), &*(**r2).borrow()) {
+    target.replace(Brz::Eps(e))
+}
+
+pub fn alt<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
+where
+    R: Semiring,
+{
+    match (&*r1.borrow(), &*r2.borrow()) {
         (_, Brz::Emp) => r1.clone(),
         (Brz::Emp, _) => r2.clone(),
-        _ => Rc::new(RefCell::new(Brz::Alt(r1.clone(), r2.clone()))),
+        _ => Brzi::new(Brz::Alt(r1.clone(), r2.clone())),
     }
 }
 
-pub fn seq<R, D>(r1: &Rc<RefCell<Brz<R, D>>>, r2: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn seq<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    match (&*(**r1).borrow(), &*(**r2).borrow()) {
+    match (&*r1.borrow(), &*r2.borrow()) {
         (_, Brz::Emp) => emp(),
         (Brz::Emp, _) => emp(),
-        _ => Rc::new(RefCell::new(Brz::Seq(r1.clone(), r2.clone()))),
+        _ => Brzi::new(Brz::Seq(r1.clone(), r2.clone())),
     }
 }
 
-pub fn rep<R, D>(r1: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn rep<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Rc::new(RefCell::new(Brz::Rep(r1.clone())))
+    Brzi::new(Brz::Rep(r1.clone()))
 }
 
-pub fn del<R, D>(r1: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn del<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Rc::new(RefCell::new(Brz::Del(r1.clone())))
+    Brzi::new(Brz::Del(r1.clone()))
 }
 
-pub fn derive<R, D>(n: &Rc<RefCell<Brz<R, D>>>, c: &D) -> Rc<RefCell<Brz<R, D>>>
+pub fn derive<R, D>(n: &Brzi<R, D>, c: &D) -> Brzi<R, D>
 where
     R: Semiring,
 {
     use self::Brz::*;
 
-    match &*(**n).borrow() {
+    match &*n.borrow() {
         Emp => emp(),
         Eps(_) => emp(),
         Del(_) => emp(),
@@ -113,13 +143,13 @@ where
     }
 }
 
-pub fn parsenull<R, D>(r: &Rc<RefCell<Brz<R, D>>>) -> R
+pub fn parsenull<R, D>(r: &Brzi<R, D>) -> R
 where
     R: Semiring + Clone,
 {
     use self::Brz::*;
 
-    match &*(**r).borrow() {
+    match &*r.borrow() {
         Emp => R::zero(),
         Eps(s) => s.clone(),
         Del(s) => parsenull(&s),
@@ -130,7 +160,7 @@ where
     }
 }
 
-pub fn parse<R, D, I>(r: &Rc<RefCell<Brz<R, D>>>, source: &mut I) -> R
+pub fn parse<R, D, I>(r: &Brzi<R, D>, source: &mut I) -> R
 where
     R: Semiring + Clone,
     I: Iterator<Item = D>,
@@ -193,8 +223,8 @@ mod tests {
 
     #[test]
     fn basics() {
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(SimpleSym { c: sample }))))
+        pub fn sym(sample: char) -> Brzi<Recognizer, char> {
+            Brzi::new(Brz::Sym(Rc::new(SimpleSym { c: sample })))
         }
 
         let cases = [
@@ -244,12 +274,12 @@ mod tests {
             }
         }
 
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(SimpleSym { c: sample }))))
+        pub fn sym(sample: char) -> Brzi<Recognizer, char> {
+            Brzi::new(Brz::Sym(Rc::new(SimpleSym { c: sample })))
         }
 
-        pub fn asy() -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(AnySym {}))))
+        pub fn asy() -> Brzi<Recognizer, char> {
+            Brzi::new(Brz::Sym(Rc::new(AnySym {})))
         }
 
         let any = rep(&asy());
@@ -362,12 +392,12 @@ mod tests {
 
     #[test]
     fn leftlong_basics() {
-        pub fn asym() -> Rc<RefCell<Brz<Leftlong, Pc>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(AnySym {}))))
+        pub fn asym() -> Brzi<Leftlong, Pc> {
+            Brzi::new(Brz::Sym(Rc::new(AnySym {})))
         }
 
-        pub fn symi(sample: char) -> Rc<RefCell<Brz<Leftlong, Pc>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(RangeSym(sample)))))
+        pub fn symi(sample: char) -> Brzi<Leftlong, Pc> {
+            Brzi::new(Brz::Sym(Rc::new(RangeSym(sample))))
         }
 
         let a = symi('a');
@@ -461,8 +491,8 @@ mod tests {
 
     #[test]
     fn string_basics() {
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Parser, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(ParserSym { c: sample }))))
+        pub fn sym(sample: char) -> Brzi<Parser, char> {
+            Brzi::new(Brz::Sym(Rc::new(ParserSym { c: sample })))
         }
 
         let cases = [
