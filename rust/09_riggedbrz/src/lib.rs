@@ -5,9 +5,10 @@
 //!
 
 #[allow(unused_imports)]
-use std::collections::HashSet;
-use std::rc::Rc;
 use std::cell::{Ref, RefCell};
+use std::collections::HashSet;
+use std::ops::Deref;
+use std::rc::Rc;
 
 // Generic type conventions:
 //   R: Our Ring Type
@@ -34,7 +35,7 @@ where
     R: Semiring,
 {
     Emp,
-    Eps(R),
+    Eps(Rc<R>),
     Sym(Rc<Sym<R, D>>),
     Del(Brzi<R, D>),
     Alt(Brzi<R, D>, Brzi<R, D>),
@@ -42,14 +43,18 @@ where
     Rep(Brzi<R, D>),
 }
 
-pub struct Brzi<R: Semiring, D>(Rc<RefCell<Brz<R, D>>>, *const Brz<R, D>);
+pub struct Brzi<R, D>(Rc<RefCell<Brz<R, D>>>)
+where
+    R: Semiring;
 
-impl<R: Semiring, D> Brzi<R, D>
+impl<R, D> Brzi<R, D>
+where
+    R: Semiring
 {
     pub fn new(b: Brz<R, D>) -> Brzi<R, D> {
-        let r = Rc::new(RefCell::new(b));
-        let p = r.as_ptr();
-        Brzi(r, p)
+        // let r = Rc::new(RefCell::new(b));
+        // let p = r.as_ptr();
+        Brzi(Rc::new(RefCell::new(b)))
     }
 
     pub fn borrow(&self) -> Ref<Brz<R, D>> {
@@ -61,10 +66,10 @@ impl<R: Semiring, D> Brzi<R, D>
     }
 
     pub fn clone(&self) -> Brzi<R, D> {
-        Brzi(self.0.clone(), self.1)
+        Brzi(self.0.clone())
     }
 }
-
+    
 pub fn emp<R, D>() -> Brzi<R, D>
 where
     R: Semiring,
@@ -72,18 +77,25 @@ where
     Brzi::new(Brz::Emp)
 }
 
+pub fn set_emp<R, D>(target: &mut Brzi<R, D>)
+where
+    R: Semiring
+{
+    target.0.replace(Brz::Emp);
+}
+
 pub fn eps<R, D>(e: R) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Brzi::new(Brz::Eps(e))
+    Brzi::new(Brz::Eps(Rc::new(e)))
 }
 
-pub fn set_eps<R, D>(target: &mut Brzi<R, D>, e: R)
+pub fn set_eps<R, D>(target: &mut Brzi<R, D>, e: Rc<R>)
 where
-    R: Semiring,
+    R: Semiring
 {
-    target.replace(Brz::Eps(e))
+    target.0.replace(Brz::Eps(e.clone()));
 }
 
 pub fn alt<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
@@ -97,6 +109,13 @@ where
     }
 }
 
+pub fn set_alt<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>)
+where
+    R: Semiring
+{
+    target.0.replace(Brz::Alt(l.clone(), r.clone()));
+}
+
 pub fn seq<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
@@ -108,11 +127,25 @@ where
     }
 }
 
+pub fn set_seq<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>)
+where
+    R: Semiring
+{
+    target.0.replace(Brz::Seq(l.clone(), r.clone()));
+}
+
 pub fn rep<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
     Brzi::new(Brz::Rep(r1.clone()))
+}
+
+pub fn set_rep<R, D>(target: &mut Brzi<R, D>, c: &Brzi<R, D>)
+where
+    R: Semiring
+{
+    target.0.replace(Brz::Rep(c.clone()));
 }
 
 pub fn del<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
@@ -134,33 +167,33 @@ where
         Del(_) => emp(),
         Sym(f) => eps(f.is(c)),
         Seq(l, r) => {
-            let dl = seq(&derive(&l, c), &r);
-            let dr = seq(&del(&l), &derive(&r, c));
+            let dl = seq(&derive(l, c), r);
+            let dr = seq(&del(l), &derive(r, c));
             alt(&dl, &dr)
         }
-        Alt(l, r) => alt(&derive(&l, c), &derive(&r, c)),
-        Rep(r) => seq(&derive(&r, c), &n.clone()),
+        Alt(l, r) => alt(&derive(l, c), &derive(r, c)),
+        Rep(r) => seq(&derive(r, c), &n.clone()),
     }
 }
 
-pub fn parsenull<R, D>(r: &Brzi<R, D>) -> R
+pub fn parsenull<R, D>(r: &Brzi<R, D>) -> Rc<R>
 where
     R: Semiring + Clone,
 {
     use self::Brz::*;
 
     match &*r.borrow() {
-        Emp => R::zero(),
-        Eps(s) => s.clone(),
-        Del(s) => parsenull(&s),
-        Rep(_) => R::one(),
-        Sym(_) => R::zero(),
-        Seq(l, r) => parsenull(&l).mul(&parsenull(&r)),
-        Alt(l, r) => parsenull(&l).add(&parsenull(&r)),
+        Emp => Rc::new(R::zero()),
+        Eps(s) => (*s).clone(),
+        Del(s) => parsenull(s),
+        Rep(_) => Rc::new(R::one()),
+        Sym(_) => Rc::new(R::zero()),
+        Seq(l, r) => Rc::new(parsenull(l).mul(&parsenull(r))),
+        Alt(l, r) => Rc::new(parsenull(l).add(&parsenull(r))),
     }
 }
 
-pub fn parse<R, D, I>(r: &Brzi<R, D>, source: &mut I) -> R
+pub fn parse<R, D, I>(r: &Brzi<R, D>, source: &mut I) -> Rc<R>
 where
     R: Semiring + Clone,
     I: Iterator<Item = D>,
@@ -393,7 +426,7 @@ mod tests {
     #[test]
     fn leftlong_basics() {
         pub fn asym() -> Brzi<Leftlong, Pc> {
-            Brzi::new(Brz::Sym(Rc::new(AnySym {})))
+           Brzi::new(Brz::Sym(Rc::new(AnySym {})))
         }
 
         pub fn symi(sample: char) -> Brzi<Leftlong, Pc> {
@@ -428,7 +461,7 @@ mod tests {
                     .enumerate()
                     .map(|c| Pc(c.0, c.1)),
             );
-            assert_eq!(result, &ret);
+            assert_eq!(result, ret.deref());
         }
     }
 
@@ -526,7 +559,7 @@ mod tests {
 
         for (name, case, sample, result) in &cases {
             println!("{:?}", name);
-            let ret = parse(case, &mut sample.to_string().chars()).0;
+            let ret = &parse(case, &mut sample.to_string().chars()).0;
             match result {
                 Some(r) => {
                     let v = ret.iter().next();
