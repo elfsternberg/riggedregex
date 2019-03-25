@@ -4,10 +4,10 @@
 //! value describing if the expression matched the string (or not).
 //!
 
-#[allow(unused_imports)]
-use std::hash::{Hash, Hasher};
 use hashbrown::{HashMap, HashSet};
 use std::cell::{Ref, RefCell};
+#[allow(unused_imports)]
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -70,7 +70,7 @@ where
 
 impl<R, D> Clone for Brzi<R, D>
 where
-    R: Semiring
+    R: Semiring,
 {
     fn clone(&self) -> Brzi<R, D> {
         Brzi(self.0.clone(), self.1)
@@ -79,27 +79,23 @@ where
 
 impl<R, D> std::cmp::PartialEq for Brzi<R, D>
 where
-    R: Semiring
+    R: Semiring,
 {
     fn eq(&self, other: &Brzi<R, D>) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
-impl<'a, R, D> Eq for Brzi<R, D>
-where
-    R: Semiring
-{}
+impl<'a, R, D> Eq for Brzi<R, D> where R: Semiring {}
 
 impl<R, D> Hash for Brzi<R, D>
 where
-    R: Semiring
+    R: Semiring,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.1.hash(state);
     }
 }
-
 
 pub fn emp<R, D>() -> Brzi<R, D>
 where
@@ -278,7 +274,11 @@ where
     }
 }
 
-pub fn set_optimized_red<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, func: &Rc<Fn(&Rc<R>) -> Rc<R>>) -> bool
+pub fn set_optimized_red<R, D>(
+    target: &mut Brzi<R, D>,
+    l: &Brzi<R, D>,
+    func: &Rc<Fn(&Rc<R>) -> Rc<R>>,
+) -> bool
 where
     R: Semiring + 'static,
 {
@@ -319,20 +319,54 @@ where
     Brzi::new(Brz::Ukn)
 }
 
+struct HMPair<R, D>(Brzi<R, D>, D)
+where
+    R: Semiring,
+    D: Clone + Hash + Eq;
+
+impl<R, D> std::cmp::PartialEq for HMPair<R, D>
+where
+    R: Semiring,
+    D: Clone + Hash + Eq,
+{
+    fn eq(&self, other: &HMPair<R, D>) -> bool {
+        (self.0).0.as_ptr() == (other.0).0.as_ptr() && self.1 == other.1
+    }
+}
+
+impl<R, D> Eq for HMPair<R, D>
+where
+    R: Semiring,
+    D: Clone + Hash + Eq,
+{}
+
+impl<R, D> Hash for HMPair<R, D>
+where
+    R: Semiring,
+    D: Clone + Hash + Eq,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (self.0).1.hash(state);
+        self.1.hash(state);
+    }
+}
+
 struct Derive<R, D>
 where
-    R: Semiring
+    R: Semiring,
+    D: Clone + Hash + Eq,
 {
+    memo: HashMap<HMPair<R, D>, Brzi<R, D>>,
     nulls: HashMap<Brzi<R, D>, Nullable>,
     listeners: HashMap<Brzi<R, D>, Vec<Brzi<R, D>>>,
 }
 
 pub fn parsenull<R, D>(node: &Brzi<R, D>) -> Rc<R>
 where
-    R: Semiring + 'static
+    R: Semiring + 'static,
 {
     use self::Brz::*;
-    
+
     match &*node.borrow() {
         Emp => Rc::new(R::zero()),
         Eps(ref rig) => rig.clone(),
@@ -357,20 +391,24 @@ enum Nullable {
 impl<R, D> Derive<R, D>
 where
     R: Semiring + 'static,
-    D: 'static
+    D: Clone + Hash + Eq + 'static,
 {
-
     pub fn new() -> Derive<R, D> {
-        Derive{
+        Derive {
+            memo: HashMap::new(),
             listeners: HashMap::new(),
             nulls: HashMap::new(),
         }
     }
 
-    pub fn derive(&mut self, node: &Brzi<R, D>, c: &D) -> Brzi<R, D>
-    {
+    pub fn derive(&mut self, node: &Brzi<R, D>, c: &D) -> Brzi<R, D> {
         use self::Brz::*;
-        
+        {
+            if let Some(cached_node) = self.memo.get(&HMPair(node.clone(), c.clone())) {
+                return cached_node.clone();
+            };
+        };
+
         let mut next_derivative = match &*node.borrow() {
             Emp => emp(),
             Eps(_) => emp(),
@@ -379,7 +417,9 @@ where
             Rep(_) => ukn(),
             Ukn => unreachable!(),
         };
-    
+
+        self.memo.insert(HMPair(node.clone(), c.clone()), next_derivative.clone());
+
         match &*node.borrow() {
             Seq(cl, cr) => {
                 if self.nullable(cl) {
@@ -398,22 +438,26 @@ where
                     set_optimized_seq(&mut next_derivative, &self.derive(&cl, c), &cr);
                 }
             }
-    
+
             Alt(l, r) => {
-                set_optimized_alt(&mut next_derivative, &self.derive(&l, c), &self.derive(&r, c));
+                set_optimized_alt(
+                    &mut next_derivative,
+                    &self.derive(&l, c),
+                    &self.derive(&r, c),
+                );
             }
-    
+
             Rep(r) => {
                 set_optimized_seq(&mut next_derivative, &self.derive(&r, c), &node.clone());
             }
-    
+
             Red(ch, func) => {
                 set_optimized_red(&mut next_derivative, &self.derive(&ch, c), func);
             }
-    
+
             _ => {}
         };
-    
+
         next_derivative
     }
 
@@ -421,18 +465,18 @@ where
         self.cached_nullable(&node, None, &Nullable::Unvisited)
     }
 
-    fn cached_nullable(&mut self, node: &Brzi<R, D>, parent: Option<&Brzi<R, D>>, status: &Nullable) -> bool {
+    fn cached_nullable(
+        &mut self,
+        node: &Brzi<R, D>,
+        parent: Option<&Brzi<R, D>>,
+        status: &Nullable,
+    ) -> bool {
         use self::Brz::*;
         use self::Nullable::*;
         let nullable = self.nulls.get(node).unwrap_or(match &*(node.borrow()) {
-            Emp
-                | Sym(_) => &Reject,
+            Emp | Sym(_) => &Reject,
             Eps(_) => &Accept,
-            Alt(_, _)
-                | Seq(_, _)
-                | Red(_, _)
-                | Rep(_)
-                | Ukn => &Unvisited
+            Alt(_, _) | Seq(_, _) | Red(_, _) | Rep(_) | Ukn => &Unvisited,
         });
 
         match nullable {
@@ -440,7 +484,9 @@ where
             Reject => false,
             InProgress => {
                 if let Some(parent) = parent {
-                    self.listeners.entry(parent.clone()).or_insert(vec![node.clone()]);
+                    self.listeners
+                        .entry(parent.clone())
+                        .or_insert(vec![node.clone()]);
                 }
                 false
             }
@@ -452,7 +498,9 @@ where
                 }
 
                 if let Some(parent) = parent {
-                    self.listeners.entry(parent.clone()).or_insert(vec![node.clone()]);
+                    self.listeners
+                        .entry(parent.clone())
+                        .or_insert(vec![node.clone()]);
                 }
                 false
             }
@@ -473,7 +521,7 @@ where
         }
         true
     }
-    
+
     fn base_nullable(&mut self, node: &Brzi<R, D>, status: &Nullable) -> bool {
         use self::Brz::*;
         match &*node.0.borrow() {
@@ -482,18 +530,18 @@ where
             Sym(_) => false,
             Rep(_) => true,
             Alt(cl, cr) => {
-                self.cached_nullable(&cl, Some(node), status) || self.cached_nullable(&cr, Some(node), status)
+                self.cached_nullable(&cl, Some(node), status)
+                    || self.cached_nullable(&cr, Some(node), status)
             }
             Seq(cl, cr) => {
-                self.cached_nullable(&cl, Some(node), status) && self.cached_nullable(&cr, Some(node), status)
-            }
-            Red(cl, _) => {
                 self.cached_nullable(&cl, Some(node), status)
+                    && self.cached_nullable(&cr, Some(node), status)
             }
+            Red(cl, _) => self.cached_nullable(&cl, Some(node), status),
             Ukn => unreachable!(),
         }
     }
-    
+
     pub fn parse<I>(&mut self, b: &Brzi<R, D>, source: &mut I) -> Rc<R>
     where
         I: Iterator<Item = D>,
@@ -503,7 +551,7 @@ where
         } else {
             return parsenull(b);
         };
-    
+
         let innerderive = |b2, c2| self.derive(&b2, &c2);
         parsenull(&source.fold(start, innerderive))
     }
@@ -512,13 +560,12 @@ where
 pub fn parse<R, D, I>(b: &Brzi<R, D>, source: &mut I) -> Rc<R>
 where
     R: Semiring + 'static,
-    D: 'static,
+    D: Hash + Clone + Eq + 'static,
     I: Iterator<Item = D>,
 {
     let mut derive = Derive::new();
     derive.parse(b, source)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -531,7 +578,7 @@ mod tests {
     // |_|_\___\__\___/\__, |_||_|_/__\___|
     //                 |___/
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Hash, Copy, Clone, PartialEq)]
     pub struct Recognizer(bool);
 
     impl Semiring for Recognizer {
@@ -659,7 +706,7 @@ mod tests {
         fn index(i: usize) -> S;
     }
 
-    #[derive(Debug, Clone, Eq, PartialEq)]
+    #[derive(Debug, Hash, Clone, Eq, PartialEq)]
     pub enum Leftlong {
         Notfound,            // Zero
         Scanning,            // One
@@ -711,7 +758,7 @@ mod tests {
     }
 
     // The position and character being analyzed.
-
+    #[derive(Hash, Eq, PartialEq, Clone)]
     pub struct Pc(usize, char);
 
     #[derive(Clone)]
