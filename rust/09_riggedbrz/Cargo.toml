@@ -5,3 +5,4 @@ authors = ["Elf M. Sternberg <elf.sternberg@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+hashbrown = "0.1.7"

@@ -5,8 +5,9 @@
 //!
 
 #[allow(unused_imports)]
+use std::hash::{Hash, Hasher};
+use hashbrown::{HashMap, HashSet};
 use std::cell::{Ref, RefCell};
-use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -44,7 +45,7 @@ where
     Ukn,
 }
 
-pub struct Brzi<R, D>(Rc<RefCell<Brz<R, D>>>)
+pub struct Brzi<R, D>(Rc<RefCell<Brz<R, D>>>, *mut Brz<R, D>)
 where
     R: Semiring;
 
@@ -53,9 +54,9 @@ where
     R: Semiring,
 {
     pub fn new(b: Brz<R, D>) -> Brzi<R, D> {
-        // let r = Rc::new(RefCell::new(b));
-        // let p = r.as_ptr();
-        Brzi(Rc::new(RefCell::new(b)))
+        let r = Rc::new(RefCell::new(b));
+        let p = r.as_ptr();
+        Brzi(r, p)
     }
 
     pub fn borrow(&self) -> Ref<Brz<R, D>> {
@@ -65,11 +66,40 @@ where
     pub fn replace(&mut self, b: Brz<R, D>) {
         self.0.replace(b);
     }
+}
 
-    pub fn clone(&self) -> Brzi<R, D> {
-        Brzi(self.0.clone())
+impl<R, D> Clone for Brzi<R, D>
+where
+    R: Semiring
+{
+    fn clone(&self) -> Brzi<R, D> {
+        Brzi(self.0.clone(), self.1)
     }
 }
+
+impl<R, D> std::cmp::PartialEq for Brzi<R, D>
+where
+    R: Semiring
+{
+    fn eq(&self, other: &Brzi<R, D>) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl<'a, R, D> Eq for Brzi<R, D>
+where
+    R: Semiring
+{}
+
+impl<R, D> Hash for Brzi<R, D>
+where
+    R: Semiring
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.1.hash(state);
+    }
+}
+
 
 pub fn emp<R, D>() -> Brzi<R, D>
 where
@@ -289,18 +319,21 @@ where
     Brzi::new(Brz::Ukn)
 }
 
-struct Derive<R, D> {
-    r: std::marker::PhantomData<R>,
-    d: std::marker::PhantomData<D>
+struct Derive<R, D>
+where
+    R: Semiring
+{
+    nulls: HashMap<Brzi<R, D>, Nullable>,
+    listeners: HashMap<Brzi<R, D>, Vec<Brzi<R, D>>>,
 }
 
-pub fn parsenull<R, D>(b: &Brzi<R, D>) -> Rc<R>
+pub fn parsenull<R, D>(node: &Brzi<R, D>) -> Rc<R>
 where
     R: Semiring + 'static
 {
     use self::Brz::*;
     
-    match &*b.borrow() {
+    match &*node.borrow() {
         Emp => Rc::new(R::zero()),
         Eps(ref rig) => rig.clone(),
         Rep(_) => Rc::new(R::one()),
@@ -312,6 +345,15 @@ where
     }
 }
 
+// Possible states for the nullability analyzer to be in.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Nullable {
+    Accept,
+    Reject,
+    InProgress,
+    Unvisited,
+}
+
 impl<R, D> Derive<R, D>
 where
     R: Semiring + 'static,
@@ -319,14 +361,17 @@ where
 {
 
     pub fn new() -> Derive<R, D> {
-        Derive{ r: std::marker::PhantomData, d: std::marker::PhantomData }
+        Derive{
+            listeners: HashMap::new(),
+            nulls: HashMap::new(),
+        }
     }
 
-    pub fn derive(&self, b: &Brzi<R, D>, c: &D) -> Brzi<R, D>
+    pub fn derive(&mut self, node: &Brzi<R, D>, c: &D) -> Brzi<R, D>
     {
         use self::Brz::*;
         
-        let mut next_derivative = match &*b.borrow() {
+        let mut next_derivative = match &*node.borrow() {
             Emp => emp(),
             Eps(_) => emp(),
             Sym(f) => eps(f.is(c)),
@@ -335,11 +380,11 @@ where
             Ukn => unreachable!(),
         };
     
-        match &*b.borrow() {
+        match &*node.borrow() {
             Seq(cl, cr) => {
                 if self.nullable(cl) {
-                    let l = self.derive(cl, c);
-                    let r = self.derive(cr, c);
+                    let l = self.derive(&cl, c);
+                    let r = self.derive(&cr, c);
                     let sac_l = cl.clone();
                     let red = optimized_red(
                         &r,
@@ -348,22 +393,22 @@ where
                             Rc::new(ts1.mul(&ts2))
                         }),
                     );
-                    set_alt(&mut next_derivative, &red, &optimized_seq(&l, cr));
+                    set_alt(&mut next_derivative, &red, &optimized_seq(&l, &cr));
                 } else {
-                    set_optimized_seq(&mut next_derivative, &self.derive(cl, c), cr);
+                    set_optimized_seq(&mut next_derivative, &self.derive(&cl, c), &cr);
                 }
             }
     
             Alt(l, r) => {
-                set_optimized_alt(&mut next_derivative, &self.derive(l, c), &self.derive(r, c));
+                set_optimized_alt(&mut next_derivative, &self.derive(&l, c), &self.derive(&r, c));
             }
     
             Rep(r) => {
-                set_optimized_seq(&mut next_derivative, &self.derive(r, c), &b.clone());
+                set_optimized_seq(&mut next_derivative, &self.derive(&r, c), &node.clone());
             }
     
             Red(ch, func) => {
-                set_optimized_red(&mut next_derivative, &self.derive(ch, c), func);
+                set_optimized_red(&mut next_derivative, &self.derive(&ch, c), func);
             }
     
             _ => {}
@@ -371,22 +416,85 @@ where
     
         next_derivative
     }
+
+    pub fn nullable(&mut self, node: &Brzi<R, D>) -> bool {
+        self.cached_nullable(&node, None, &Nullable::Unvisited)
+    }
+
+    fn cached_nullable(&mut self, node: &Brzi<R, D>, parent: Option<&Brzi<R, D>>, status: &Nullable) -> bool {
+        use self::Brz::*;
+        use self::Nullable::*;
+        let nullable = self.nulls.get(node).unwrap_or(match &*(node.borrow()) {
+            Emp
+                | Sym(_) => &Reject,
+            Eps(_) => &Accept,
+            Alt(_, _)
+                | Seq(_, _)
+                | Red(_, _)
+                | Rep(_)
+                | Ukn => &Unvisited
+        });
+
+        match nullable {
+            Accept => true,
+            Reject => false,
+            InProgress => {
+                if let Some(parent) = parent {
+                    self.listeners.entry(parent.clone()).or_insert(vec![node.clone()]);
+                }
+                false
+            }
+
+            Unvisited => {
+                self.nulls.insert(node.clone(), InProgress);
+                if self.compute_notify_nullable(node, status) {
+                    return true;
+                }
+
+                if let Some(parent) = parent {
+                    self.listeners.entry(parent.clone()).or_insert(vec![node.clone()]);
+                }
+                false
+            }
+        }
+    }
+
+    fn compute_notify_nullable(&mut self, node: &Brzi<R, D>, status: &Nullable) -> bool {
+        use self::Nullable::*;
+        if !self.base_nullable(node, status) {
+            return false;
+        }
+
+        self.nulls.insert(node.clone(), Accept);
+        if let Some((_, listeners)) = self.listeners.remove_entry(node) {
+            for mut childnode in listeners {
+                self.compute_notify_nullable(&mut childnode, &Accept);
+            }
+        }
+        true
+    }
     
-    pub fn nullable(&self, b: &Brzi<R, D>) -> bool
-    {
-        match &*b.0.borrow() {
-            Brz::Emp => false,
-            Brz::Eps(_) => true,
-            Brz::Sym(_) => false,
-            Brz::Alt(cl, cr) => self.nullable(&cl) || self.nullable(&cr),
-            Brz::Seq(cl, cr) => self.nullable(&cl) && self.nullable(&cr),
-            Brz::Red(cl, _) => self.nullable(&cl),
-            Brz::Rep(_) => true,
-            Brz::Ukn => unreachable!(),
+    fn base_nullable(&mut self, node: &Brzi<R, D>, status: &Nullable) -> bool {
+        use self::Brz::*;
+        match &*node.0.borrow() {
+            Emp => false,
+            Eps(_) => true,
+            Sym(_) => false,
+            Rep(_) => true,
+            Alt(cl, cr) => {
+                self.cached_nullable(&cl, Some(node), status) || self.cached_nullable(&cr, Some(node), status)
+            }
+            Seq(cl, cr) => {
+                self.cached_nullable(&cl, Some(node), status) && self.cached_nullable(&cr, Some(node), status)
+            }
+            Red(cl, _) => {
+                self.cached_nullable(&cl, Some(node), status)
+            }
+            Ukn => unreachable!(),
         }
     }
     
-    pub fn parse<I>(&self, b: &Brzi<R, D>, source: &mut I) -> Rc<R>
+    pub fn parse<I>(&mut self, b: &Brzi<R, D>, source: &mut I) -> Rc<R>
     where
         I: Iterator<Item = D>,
     {
@@ -407,7 +515,7 @@ where
     D: 'static,
     I: Iterator<Item = D>,
 {
-    let derive = Derive::new();
+    let mut derive = Derive::new();
     derive.parse(b, source)
 }
 
