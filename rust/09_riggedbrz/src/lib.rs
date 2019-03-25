@@ -41,6 +41,7 @@ where
     Alt(Brzi<R, D>, Brzi<R, D>),
     Seq(Brzi<R, D>, Brzi<R, D>),
     Rep(Brzi<R, D>),
+    Red(Brzi<R, D>, Rc<Fn(&Rc<R>) -> Rc<R>>),
     Ukn,
 }
 
@@ -177,6 +178,7 @@ where
         Seq(_, _)
             | Alt(_, _)
             | Rep(_) => ukn(),
+        Red(_, _) => unreachable!(),
         Ukn => unreachable!()
     };
 
@@ -213,6 +215,7 @@ where
         Sym(_) => Rc::new(R::zero()),
         Seq(l, r) => Rc::new(parsenull(l).mul(&parsenull(r))),
         Alt(l, r) => Rc::new(parsenull(l).add(&parsenull(r))),
+        Red(_, _) => unreachable!(),
         Ukn => unreachable!()
     }
 }
