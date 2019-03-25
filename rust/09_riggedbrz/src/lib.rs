@@ -289,65 +289,17 @@ where
     Brzi::new(Brz::Ukn)
 }
 
-pub fn derive<R, D>(b: &Brzi<R, D>, c: &D) -> Brzi<R, D>
-where
-    R: Semiring + 'static,
-    D: 'static,
-{
-    use self::Brz::*;
-
-    let mut next_derivative = match &*b.borrow() {
-        Emp => emp(),
-        Eps(_) => emp(),
-        Sym(f) => eps(f.is(c)),
-        Seq(_, _) | Alt(_, _) | Red(_, _) => ukn(),
-        Rep(_) => ukn(),
-        Ukn => unreachable!(),
-    };
-
-    match &*b.borrow() {
-        Seq(cl, cr) => {
-            if nullable(cl) {
-                let l = derive(cl, c);
-                let r = derive(cr, c);
-                let sac_l = cl.clone();
-                let red = optimized_red(
-                    &r,
-                    Rc::new(move |ts2| {
-                        let ts1 = parsenull(&sac_l);
-                        Rc::new(ts1.mul(&ts2))
-                    }),
-                );
-                set_alt(&mut next_derivative, &red, &optimized_seq(&l, cr));
-            } else {
-                set_optimized_seq(&mut next_derivative, &derive(cl, c), cr);
-            }
-        }
-
-        Alt(l, r) => {
-            set_optimized_alt(&mut next_derivative, &derive(l, c), &derive(r, c));
-        }
-
-        Rep(r) => {
-            set_optimized_seq(&mut next_derivative, &derive(r, c), &b.clone());
-        }
-
-        Red(ch, func) => {
-            set_optimized_red(&mut next_derivative, &derive(ch, c), func);
-        }
-
-        _ => {}
-    };
-
-    next_derivative
+struct Derive<R, D> {
+    r: std::marker::PhantomData<R>,
+    d: std::marker::PhantomData<D>
 }
 
 pub fn parsenull<R, D>(b: &Brzi<R, D>) -> Rc<R>
 where
-    R: Semiring,
+    R: Semiring + 'static
 {
     use self::Brz::*;
-
+    
     match &*b.borrow() {
         Emp => Rc::new(R::zero()),
         Eps(ref rig) => rig.clone(),
@@ -360,19 +312,92 @@ where
     }
 }
 
-pub fn nullable<R, D>(b: &Brzi<R, D>) -> bool
+impl<R, D> Derive<R, D>
 where
-    R: Semiring,
+    R: Semiring + 'static,
+    D: 'static
 {
-    match &*b.0.borrow() {
-        Brz::Emp => false,
-        Brz::Eps(_) => true,
-        Brz::Sym(_) => false,
-        Brz::Alt(cl, cr) => nullable(&cl) || nullable(&cr),
-        Brz::Seq(cl, cr) => nullable(&cl) && nullable(&cr),
-        Brz::Red(cl, _) => nullable(&cl),
-        Brz::Rep(_) => true,
-        Brz::Ukn => unreachable!(),
+
+    pub fn new() -> Derive<R, D> {
+        Derive{ r: std::marker::PhantomData, d: std::marker::PhantomData }
+    }
+
+    pub fn derive(&self, b: &Brzi<R, D>, c: &D) -> Brzi<R, D>
+    {
+        use self::Brz::*;
+        
+        let mut next_derivative = match &*b.borrow() {
+            Emp => emp(),
+            Eps(_) => emp(),
+            Sym(f) => eps(f.is(c)),
+            Seq(_, _) | Alt(_, _) | Red(_, _) => ukn(),
+            Rep(_) => ukn(),
+            Ukn => unreachable!(),
+        };
+    
+        match &*b.borrow() {
+            Seq(cl, cr) => {
+                if self.nullable(cl) {
+                    let l = self.derive(cl, c);
+                    let r = self.derive(cr, c);
+                    let sac_l = cl.clone();
+                    let red = optimized_red(
+                        &r,
+                        Rc::new(move |ts2| {
+                            let ts1 = parsenull(&sac_l);
+                            Rc::new(ts1.mul(&ts2))
+                        }),
+                    );
+                    set_alt(&mut next_derivative, &red, &optimized_seq(&l, cr));
+                } else {
+                    set_optimized_seq(&mut next_derivative, &self.derive(cl, c), cr);
+                }
+            }
+    
+            Alt(l, r) => {
+                set_optimized_alt(&mut next_derivative, &self.derive(l, c), &self.derive(r, c));
+            }
+    
+            Rep(r) => {
+                set_optimized_seq(&mut next_derivative, &self.derive(r, c), &b.clone());
+            }
+    
+            Red(ch, func) => {
+                set_optimized_red(&mut next_derivative, &self.derive(ch, c), func);
+            }
+    
+            _ => {}
+        };
+    
+        next_derivative
+    }
+    
+    pub fn nullable(&self, b: &Brzi<R, D>) -> bool
+    {
+        match &*b.0.borrow() {
+            Brz::Emp => false,
+            Brz::Eps(_) => true,
+            Brz::Sym(_) => false,
+            Brz::Alt(cl, cr) => self.nullable(&cl) || self.nullable(&cr),
+            Brz::Seq(cl, cr) => self.nullable(&cl) && self.nullable(&cr),
+            Brz::Red(cl, _) => self.nullable(&cl),
+            Brz::Rep(_) => true,
+            Brz::Ukn => unreachable!(),
+        }
+    }
+    
+    pub fn parse<I>(&self, b: &Brzi<R, D>, source: &mut I) -> Rc<R>
+    where
+        I: Iterator<Item = D>,
+    {
+        let start = if let Some(c) = source.next() {
+            self.derive(&b, &c)
+        } else {
+            return parsenull(b);
+        };
+    
+        let innerderive = |b2, c2| self.derive(&b2, &c2);
+        parsenull(&source.fold(start, innerderive))
     }
 }
 
@@ -382,15 +407,10 @@ where
     D: 'static,
     I: Iterator<Item = D>,
 {
-    let start = if let Some(c) = source.next() {
-        derive(&b, &c)
-    } else {
-        return parsenull(b);
-    };
-
-    let innerderive = |b2, c2| derive(&b2, &c2);
-    parsenull(&source.fold(start, innerderive))
+    let derive = Derive::new();
+    derive.parse(b, source)
 }
+
 
 #[cfg(test)]
 mod tests {
