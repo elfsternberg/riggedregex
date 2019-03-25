@@ -37,7 +37,6 @@ where
     Emp,
     Eps(Rc<R>),
     Sym(Rc<Sym<R, D>>),
-    Del(Brzi<R, D>),
     Alt(Brzi<R, D>, Brzi<R, D>),
     Seq(Brzi<R, D>, Brzi<R, D>),
     Rep(Brzi<R, D>),
@@ -51,7 +50,7 @@ where
 
 impl<R, D> Brzi<R, D>
 where
-    R: Semiring
+    R: Semiring,
 {
     pub fn new(b: Brz<R, D>) -> Brzi<R, D> {
         // let r = Rc::new(RefCell::new(b));
@@ -71,7 +70,7 @@ where
         Brzi(self.0.clone())
     }
 }
-    
+
 pub fn emp<R, D>() -> Brzi<R, D>
 where
     R: Semiring,
@@ -81,80 +80,206 @@ where
 
 pub fn set_emp<R, D>(target: &mut Brzi<R, D>)
 where
-    R: Semiring
+    R: Semiring,
 {
     target.0.replace(Brz::Emp);
 }
 
-pub fn eps<R, D>(e: R) -> Brzi<R, D>
+pub fn eps<R, D>(rig: R) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Brzi::new(Brz::Eps(Rc::new(e)))
+    Brzi::new(Brz::Eps(Rc::new(rig)))
 }
 
-pub fn set_eps<R, D>(target: &mut Brzi<R, D>, e: Rc<R>)
-where
-    R: Semiring
-{
-    target.0.replace(Brz::Eps(e.clone()));
-}
-
-pub fn alt<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
+pub fn set_eps<R, D>(target: &mut Brzi<R, D>, rig: Rc<R>)
 where
     R: Semiring,
 {
-    match (&*r1.borrow(), &*r2.borrow()) {
-        (_, Brz::Emp) => r1.clone(),
-        (Brz::Emp, _) => r2.clone(),
-        _ => Brzi::new(Brz::Alt(r1.clone(), r2.clone())),
+    target.0.replace(Brz::Eps(rig.clone()));
+}
+
+pub fn alt<R, D>(l: &Brzi<R, D>, r: &Brzi<R, D>) -> Brzi<R, D>
+where
+    R: Semiring,
+{
+    use self::Brz::*;
+    match (&*l.borrow(), &*r.borrow()) {
+        (_, Emp) => l.clone(),
+        (Emp, _) => r.clone(),
+        _ => Brzi::new(Brz::Alt(l.clone(), r.clone())),
     }
 }
 
 pub fn set_alt<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>)
 where
-    R: Semiring
+    R: Semiring,
 {
     target.0.replace(Brz::Alt(l.clone(), r.clone()));
 }
 
-pub fn seq<R, D>(r1: &Brzi<R, D>, r2: &Brzi<R, D>) -> Brzi<R, D>
+fn set_optimized_alt<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>) -> bool
+where
+    R: Semiring + 'static,
+{
+    match (&*l.0.borrow(), &*r.0.borrow()) {
+        (Brz::Eps(ref leps), Brz::Eps(ref reps)) => {
+            set_eps(target, Rc::new((*leps).add(&*reps)));
+            true
+        }
+
+        _ => {
+            set_alt(target, l, r);
+            false
+        }
+    }
+}
+
+pub fn seq<R, D>(l: &Brzi<R, D>, r: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    match (&*r1.borrow(), &*r2.borrow()) {
-        (_, Brz::Emp) => emp(),
-        (Brz::Emp, _) => emp(),
-        _ => Brzi::new(Brz::Seq(r1.clone(), r2.clone())),
+    use self::Brz::*;
+    match (&*l.borrow(), &*r.borrow()) {
+        (_, Emp) => emp(),
+        (Emp, _) => emp(),
+        _ => Brzi::new(Brz::Seq(l.clone(), r.clone())),
     }
 }
 
 pub fn set_seq<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>)
 where
-    R: Semiring
+    R: Semiring,
 {
     target.0.replace(Brz::Seq(l.clone(), r.clone()));
 }
 
-pub fn rep<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
+pub fn optimized_seq<R, D>(l: &Brzi<R, D>, r: &Brzi<R, D>) -> Brzi<R, D>
+where
+    R: Semiring + 'static,
+{
+    use self::Brz::*;
+    match &*l.0.borrow() {
+        Emp => emp(),
+
+        Eps(ref rig) => {
+            let closed_rig = rig.clone();
+            red(&r, Rc::new(move |rg| Rc::new(closed_rig.mul(&rg))))
+        }
+
+        _ => seq(l, r),
+    }
+}
+
+fn set_optimized_seq<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>) -> bool
+where
+    R: Semiring + 'static,
+{
+    use self::Brz::*;
+    match &*l.0.borrow() {
+        Emp => {
+            set_emp(target);
+            true
+        }
+
+        Eps(ref rig) => {
+            let closed_rig = rig.clone();
+            set_red(target, &r, Rc::new(move |rg| Rc::new(closed_rig.mul(&rg))));
+            true
+        }
+
+        _ => {
+            set_seq(target, l, r);
+            false
+        }
+    }
+}
+
+pub fn rep<R, D>(l: &Brzi<R, D>) -> Brzi<R, D>
 where
     R: Semiring,
 {
-    Brzi::new(Brz::Rep(r1.clone()))
+    Brzi::new(Brz::Rep(l.clone()))
 }
 
-pub fn set_rep<R, D>(target: &mut Brzi<R, D>, c: &Brzi<R, D>)
-where
-    R: Semiring
-{
-    target.0.replace(Brz::Rep(c.clone()));
-}
-
-pub fn del<R, D>(r1: &Brzi<R, D>) -> Brzi<R, D>
+pub fn set_rep<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>)
 where
     R: Semiring,
 {
-    Brzi::new(Brz::Del(r1.clone()))
+    target.0.replace(Brz::Rep(l.clone()));
+}
+
+pub fn red<R, D>(l: &Brzi<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Brzi<R, D>
+where
+    R: Semiring + 'static,
+{
+    let closed_fn = func.clone();
+    Brzi::new(Brz::Red(l.clone(), Rc::new(move |ts| closed_fn(ts))))
+}
+
+pub fn set_red<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>)
+where
+    R: Semiring + 'static,
+{
+    target.0.replace(Brz::Red(l.clone(), func.clone()));
+}
+
+pub fn optimized_red<R, D>(l: &Brzi<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Brzi<R, D>
+where
+    R: Semiring + 'static,
+{
+    use self::Brz::*;
+
+    match &*l.0.borrow() {
+        Emp => emp(),
+
+        Eps(ref rig) => {
+            let res_rig = func(&*rig);
+            Brzi::new(Eps(res_rig))
+        }
+
+        Red(ref child, ref gunc) => {
+            let f = func.clone();
+            let g = gunc.clone();
+            red(child, Rc::new(move |ts| f(&g(ts))))
+        }
+
+        _ => red(l, func),
+    }
+}
+
+pub fn set_optimized_red<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, func: &Rc<Fn(&Rc<R>) -> Rc<R>>) -> bool
+where
+    R: Semiring + 'static,
+{
+    use self::Brz::*;
+
+    match &*l.0.borrow() {
+        Emp => {
+            set_emp(target);
+            true
+        }
+
+        Eps(ref rig) => {
+            let res_rig = func(&*rig);
+            set_eps(target, res_rig);
+            true
+        }
+
+        // Given two reductions, create a single reduction that runs
+        // both in composition.
+        Red(ref child, ref gunc) => {
+            let f = func.clone();
+            let g = gunc.clone();
+            set_red(target, child, Rc::new(move |ts| f(&g(ts))));
+            true
+        }
+
+        _ => {
+            set_red(target, l, func.clone());
+            false
+        }
+    }
 }
 
 pub fn ukn<R, D>() -> Brzi<R, D>
@@ -164,74 +289,106 @@ where
     Brzi::new(Brz::Ukn)
 }
 
-pub fn derive<R, D>(n: &Brzi<R, D>, c: &D) -> Brzi<R, D>
+pub fn derive<R, D>(b: &Brzi<R, D>, c: &D) -> Brzi<R, D>
 where
-    R: Semiring,
+    R: Semiring + 'static,
+    D: 'static,
 {
     use self::Brz::*;
 
-    let mut next_derivative = match &*n.borrow() {
+    let mut next_derivative = match &*b.borrow() {
         Emp => emp(),
         Eps(_) => emp(),
-        Del(_) => emp(),
         Sym(f) => eps(f.is(c)),
-        Seq(_, _)
-            | Alt(_, _)
-            | Rep(_) => ukn(),
-        Red(_, _) => unreachable!(),
-        Ukn => unreachable!()
+        Seq(_, _) | Alt(_, _) | Red(_, _) => ukn(),
+        Rep(_) => ukn(),
+        Ukn => unreachable!(),
     };
 
-    match &*n.borrow() {
-        Seq(l, r) => {
-            let dl = seq(&derive(l, c), r);
-            let dr = seq(&del(l), &derive(r, c));
-            set_alt(&mut next_derivative, &dl, &dr);
+    match &*b.borrow() {
+        Seq(cl, cr) => {
+            if nullable(cl) {
+                let l = derive(cl, c);
+                let r = derive(cr, c);
+                let sac_l = cl.clone();
+                let red = optimized_red(
+                    &r,
+                    Rc::new(move |ts2| {
+                        let ts1 = parsenull(&sac_l);
+                        Rc::new(ts1.mul(&ts2))
+                    }),
+                );
+                set_alt(&mut next_derivative, &red, &optimized_seq(&l, cr));
+            } else {
+                set_optimized_seq(&mut next_derivative, &derive(cl, c), cr);
+            }
         }
+
         Alt(l, r) => {
-            set_alt(&mut next_derivative, &derive(l, c), &derive(r, c));
+            set_optimized_alt(&mut next_derivative, &derive(l, c), &derive(r, c));
         }
-        
+
         Rep(r) => {
-            set_seq(&mut next_derivative, &derive(r, c), &n.clone());
+            set_optimized_seq(&mut next_derivative, &derive(r, c), &b.clone());
         }
+
+        Red(ch, func) => {
+            set_optimized_red(&mut next_derivative, &derive(ch, c), func);
+        }
+
         _ => {}
     };
 
     next_derivative
 }
 
-pub fn parsenull<R, D>(r: &Brzi<R, D>) -> Rc<R>
+pub fn parsenull<R, D>(b: &Brzi<R, D>) -> Rc<R>
 where
-    R: Semiring + Clone,
+    R: Semiring,
 {
     use self::Brz::*;
 
-    match &*r.borrow() {
+    match &*b.borrow() {
         Emp => Rc::new(R::zero()),
-        Eps(s) => (*s).clone(),
-        Del(s) => parsenull(s),
+        Eps(ref rig) => rig.clone(),
         Rep(_) => Rc::new(R::one()),
         Sym(_) => Rc::new(R::zero()),
         Seq(l, r) => Rc::new(parsenull(l).mul(&parsenull(r))),
         Alt(l, r) => Rc::new(parsenull(l).add(&parsenull(r))),
-        Red(_, _) => unreachable!(),
-        Ukn => unreachable!()
+        Red(c, f) => f(&parsenull(c)),
+        Ukn => unreachable!(),
     }
 }
 
-pub fn parse<R, D, I>(r: &Brzi<R, D>, source: &mut I) -> Rc<R>
+pub fn nullable<R, D>(b: &Brzi<R, D>) -> bool
 where
-    R: Semiring + Clone,
+    R: Semiring,
+{
+    match &*b.0.borrow() {
+        Brz::Emp => false,
+        Brz::Eps(_) => true,
+        Brz::Sym(_) => false,
+        Brz::Alt(cl, cr) => nullable(&cl) || nullable(&cr),
+        Brz::Seq(cl, cr) => nullable(&cl) && nullable(&cr),
+        Brz::Red(cl, _) => nullable(&cl),
+        Brz::Rep(_) => true,
+        Brz::Ukn => unreachable!(),
+    }
+}
+
+pub fn parse<R, D, I>(b: &Brzi<R, D>, source: &mut I) -> Rc<R>
+where
+    R: Semiring + 'static,
+    D: 'static,
     I: Iterator<Item = D>,
 {
     let start = if let Some(c) = source.next() {
-        derive(&r, &c)
+        derive(&b, &c)
     } else {
-        return parsenull(r);
+        return parsenull(b);
     };
 
-    let innerderive = |b, c| derive(&b, &c);
+    let innerderive = |b2, c2| derive(&b2, &c2);
     parsenull(&source.fold(start, innerderive))
 }
 
@@ -453,7 +610,7 @@ mod tests {
     #[test]
     fn leftlong_basics() {
         pub fn asym() -> Brzi<Leftlong, Pc> {
-           Brzi::new(Brz::Sym(Rc::new(AnySym {})))
+            Brzi::new(Brz::Sym(Rc::new(AnySym {})))
         }
 
         pub fn symi(sample: char) -> Brzi<Leftlong, Pc> {
