@@ -41,6 +41,7 @@ where
     Alt(Brzi<R, D>, Brzi<R, D>),
     Seq(Brzi<R, D>, Brzi<R, D>),
     Rep(Brzi<R, D>),
+    Ukn,
 }
 
 pub struct Brzi<R, D>(Rc<RefCell<Brz<R, D>>>)
@@ -155,25 +156,47 @@ where
     Brzi::new(Brz::Del(r1.clone()))
 }
 
+pub fn ukn<R, D>() -> Brzi<R, D>
+where
+    R: Semiring,
+{
+    Brzi::new(Brz::Ukn)
+}
+
 pub fn derive<R, D>(n: &Brzi<R, D>, c: &D) -> Brzi<R, D>
 where
     R: Semiring,
 {
     use self::Brz::*;
 
-    match &*n.borrow() {
+    let mut next_derivative = match &*n.borrow() {
         Emp => emp(),
         Eps(_) => emp(),
         Del(_) => emp(),
         Sym(f) => eps(f.is(c)),
+        Seq(_, _)
+            | Alt(_, _)
+            | Rep(_) => ukn(),
+        Ukn => unreachable!()
+    };
+
+    match &*n.borrow() {
         Seq(l, r) => {
             let dl = seq(&derive(l, c), r);
             let dr = seq(&del(l), &derive(r, c));
-            alt(&dl, &dr)
+            set_alt(&mut next_derivative, &dl, &dr);
         }
-        Alt(l, r) => alt(&derive(l, c), &derive(r, c)),
-        Rep(r) => seq(&derive(r, c), &n.clone()),
-    }
+        Alt(l, r) => {
+            set_alt(&mut next_derivative, &derive(l, c), &derive(r, c));
+        }
+        
+        Rep(r) => {
+            set_seq(&mut next_derivative, &derive(r, c), &n.clone());
+        }
+        _ => {}
+    };
+
+    next_derivative
 }
 
 pub fn parsenull<R, D>(r: &Brzi<R, D>) -> Rc<R>
@@ -190,6 +213,7 @@ where
         Sym(_) => Rc::new(R::zero()),
         Seq(l, r) => Rc::new(parsenull(l).mul(&parsenull(r))),
         Alt(l, r) => Rc::new(parsenull(l).add(&parsenull(r))),
+        Ukn => unreachable!()
     }
 }
 
