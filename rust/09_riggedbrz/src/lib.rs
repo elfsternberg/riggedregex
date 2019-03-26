@@ -405,6 +405,7 @@ where
         use self::Brz::*;
         {
             if let Some(cached_node) = self.memo.get(&HMPair(node.clone(), c.clone())) {
+                println!("Found a cached node.");
                 return cached_node.clone();
             };
         };
@@ -934,4 +935,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn recursion_loop() {
+        pub fn sym(sample: char) -> Brzi<Parser, char> {
+            Brzi::new(Brz::Sym(Rc::new(ParserSym { c: sample })))
+        }
+
+        let ee = seq(&sym('e'), &sym('e'));
+        let mut estar = ukn();
+        let eep = seq(&ee, &estar);
+        let eto = eps(Parser::one());
+        set_alt(&mut estar, &eto, &eep);
+        let beer = seq(&sym('b'), &seq(&estar, &sym('r')));
+
+        let cases = [
+            ("br", &beer, "br", Some("br")),
+            ("beer", &beer, "beer", Some("beer")),
+            ("beeeeeer", &beer, "beeeeeer", Some("beeeeeer")),
+            ("bad beeer", &beer, "beeer", None),
+            ("bad bear", &beer, "bear", None)
+        ];
+
+        for (name, case, sample, result) in &cases {
+            println!("{:?}", name);
+            let ret = &parse(case, &mut sample.to_string().chars()).0;
+            match result {
+                Some(r) => {
+                    let v = ret.iter().next();
+                    if let Some(s) = v {
+                        assert_eq!(s, sample);
+                    } else {
+                        panic!("Strings did not match: {:?}, {:?}", r, v);
+                    }
+                    assert_eq!(1, ret.len());
+                }
+                None => assert_eq!(0, ret.len()),
+            }
+        }
+    }
 }
