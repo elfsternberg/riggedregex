@@ -32,73 +32,144 @@ where
 pub enum Brz<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
     Emp,
     Eps(R),
     Sym(Rc<Sym<R, D>>),
-    Del(Rc<RefCell<Brz<R, D>>>),
-    Alt(Rc<RefCell<Brz<R, D>>>, Rc<RefCell<Brz<R, D>>>),
-    Seq(Rc<RefCell<Brz<R, D>>>, Rc<RefCell<Brz<R, D>>>),
-    Rep(Rc<RefCell<Brz<R, D>>>),
+    Del(Rc<RefCell<Expr<R, D>>>),
+    Alt(Rc<RefCell<Expr<R, D>>>, Rc<RefCell<Expr<R, D>>>),
+    Seq(Rc<RefCell<Expr<R, D>>>, Rc<RefCell<Expr<R, D>>>),
+    Rep(Rc<RefCell<Expr<R, D>>>),
 }
 
-pub fn emp<R, D>() -> Rc<RefCell<Brz<R, D>>>
+pub struct DerivativeCache<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    Rc::new(RefCell::new(Brz::Emp))
+    token: D,
+    derivative: Expt<R, D>
+}
+    
+pub enum Nullability {
+    Accept,
+    Reject,
+    InProgress,
+    Unvisited
 }
 
-pub fn eps<R, D>(e: R) -> Rc<RefCell<Brz<R, D>>>
+type Expt<R, D> = Rc<RefCell<Expr<R, D>>>;
+
+pub struct Expr<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    Rc::new(RefCell::new(Brz::Eps(e)))
+    expr: Brz<R, D>,
+    known_derivative: Option<DerivativeCache<R, D>>,
+    nullable: Nullability,
+    product: Option<R>,
+    listeners: Vec<Expt<R, D>>
 }
 
-pub fn alt<R, D>(r1: &Rc<RefCell<Brz<R, D>>>, r2: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+impl<R, D> Expr<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    match (&*(**r1).borrow(), &*(**r2).borrow()) {
+    pub fn new(b: Brz<R, D>, n: Nullability) -> Expr<R, D> {
+        Expr {
+            expr: b,
+            known_derivative: None,
+            nullable: n,
+            product: None,
+            listeners: Vec::new(),
+        }
+    }
+}
+
+#[inline]
+pub fn expr<R, D>(b: Brz<R, D>, n: Nullability) -> Expt<R, D>
+where
+    R: Semiring,
+    D: PartialEq + Copy + Clone
+{
+    Rc::new(RefCell::new(Expr::new(b, n)))
+}
+
+pub fn emp<R, D>() -> Expt<R, D>
+where
+    R: Semiring,
+    D: PartialEq + Copy + Clone
+{
+    expr(Brz::Emp, Nullability::Reject)
+}
+
+pub fn eps<R, D>(e: R) -> Expt<R, D>
+where
+    R: Semiring,
+    D: PartialEq + Copy + Clone
+{
+    expr(Brz::Eps(e), Nullability::Accept)
+}
+
+pub fn alt<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
+where
+    R: Semiring,
+    D: PartialEq + Copy + Clone
+{
+    match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => r1.clone(),
         (Brz::Emp, _) => r2.clone(),
-        _ => Rc::new(RefCell::new(Brz::Alt(r1.clone(), r2.clone()))),
+        _ => expr(Brz::Alt(r1.clone(), r2.clone()), Nullability::Unvisited),
     }
 }
 
-pub fn seq<R, D>(r1: &Rc<RefCell<Brz<R, D>>>, r2: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn seq<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    match (&*(**r1).borrow(), &*(**r2).borrow()) {
+    match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => emp(),
         (Brz::Emp, _) => emp(),
-        _ => Rc::new(RefCell::new(Brz::Seq(r1.clone(), r2.clone()))),
+        _ => expr(Brz::Seq(r1.clone(), r2.clone()), Nullability::Unvisited),
     }
 }
 
-pub fn rep<R, D>(r1: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn rep<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    Rc::new(RefCell::new(Brz::Rep(r1.clone())))
+    expr(Brz::Rep(r1.clone()), Nullability::Accept)
 }
 
-pub fn del<R, D>(r1: &Rc<RefCell<Brz<R, D>>>) -> Rc<RefCell<Brz<R, D>>>
+pub fn del<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone
 {
-    Rc::new(RefCell::new(Brz::Del(r1.clone())))
+    expr(Brz::Del(r1.clone()), Nullability::Reject)
 }
 
-pub fn derive<R, D>(n: &Rc<RefCell<Brz<R, D>>>, c: &D) -> Rc<RefCell<Brz<R, D>>>
+pub fn derive<R, D>(n: &Expt<R, D>, c: &D) -> Expt<R, D>
 where
     R: Semiring,
+    D: PartialEq + Copy + Clone,
 {
     use self::Brz::*;
 
-    match &*(**n).borrow() {
+    {
+        if let Some(kd) = &n.borrow().known_derivative {
+            if kd.token == *c {
+                return kd.derivative.clone()
+            }
+        }
+    }
+    
+    let res = match &n.borrow().expr {
         Emp => emp(),
         Eps(_) => emp(),
         Del(_) => emp(),
@@ -110,16 +181,33 @@ where
         }
         Alt(l, r) => alt(&derive(&l, c), &derive(&r, c)),
         Rep(r) => seq(&derive(&r, c), &n.clone()),
+    };
+
+    {
+        let mut nbm = n.borrow_mut();
+        nbm.known_derivative = Some(DerivativeCache {
+            token: *c,
+            derivative: res.clone()
+        })
     }
+    
+    res
 }
 
-pub fn parsenull<R, D>(r: &Rc<RefCell<Brz<R, D>>>) -> R
+pub fn parsenull<R, D>(r: &Expt<R, D>) -> R
 where
     R: Semiring + Clone,
+    D: PartialEq + Copy + Clone
 {
     use self::Brz::*;
 
-    match &*(**r).borrow() {
+    {
+        if let Some(product) = &r.borrow().product {
+            return product.clone()
+        }
+    }
+
+    let product = match &r.borrow().expr {
         Emp => R::zero(),
         Eps(s) => s.clone(),
         Del(s) => parsenull(&s),
@@ -127,12 +215,20 @@ where
         Sym(_) => R::zero(),
         Seq(l, r) => parsenull(&l).mul(&parsenull(&r)),
         Alt(l, r) => parsenull(&l).add(&parsenull(&r)),
+    };
+
+    {
+        let mut nbm = r.borrow_mut();
+        nbm.product= Some(product.clone());
     }
+
+    product
 }
 
-pub fn parse<R, D, I>(r: &Rc<RefCell<Brz<R, D>>>, source: &mut I) -> R
+pub fn parse<R, D, I>(r: &Expt<R, D>, source: &mut I) -> R
 where
     R: Semiring + Clone,
+    D: PartialEq + Copy + Clone,
     I: Iterator<Item = D>,
 {
     let start = if let Some(c) = source.next() {
@@ -193,8 +289,8 @@ mod tests {
 
     #[test]
     fn basics() {
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(SimpleSym { c: sample }))))
+        pub fn sym(sample: char) -> Expt<Recognizer, char> {
+            expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullability::Reject)
         }
 
         let cases = [
@@ -244,12 +340,12 @@ mod tests {
             }
         }
 
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(SimpleSym { c: sample }))))
+        pub fn sym(sample: char) -> Expt<Recognizer, char> {
+            expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullability::Reject)
         }
 
-        pub fn asy() -> Rc<RefCell<Brz<Recognizer, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(AnySym {}))))
+        pub fn asy() -> Expt<Recognizer, char> {
+            expr(Brz::Sym(Rc::new(AnySym {})), Nullability::Reject)
         }
 
         let any = rep(&asy());
@@ -337,6 +433,7 @@ mod tests {
 
     // The position and character being analyzed.
 
+    #[derive(Eq, PartialEq, Copy, Clone)]
     pub struct Pc(usize, char);
 
     #[derive(Clone)]
@@ -362,12 +459,12 @@ mod tests {
 
     #[test]
     fn leftlong_basics() {
-        pub fn asym() -> Rc<RefCell<Brz<Leftlong, Pc>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(AnySym {}))))
+        pub fn asym() -> Expt<Leftlong, Pc> {
+            expr(Brz::Sym(Rc::new(AnySym {})), Nullability::Reject)
         }
 
-        pub fn symi(sample: char) -> Rc<RefCell<Brz<Leftlong, Pc>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(RangeSym(sample)))))
+        pub fn symi(sample: char) -> Expt<Leftlong, Pc> {
+            expr(Brz::Sym(Rc::new(RangeSym(sample))), Nullability::Reject)
         }
 
         let a = symi('a');
@@ -461,8 +558,8 @@ mod tests {
 
     #[test]
     fn string_basics() {
-        pub fn sym(sample: char) -> Rc<RefCell<Brz<Parser, char>>> {
-            Rc::new(RefCell::new(Brz::Sym(Rc::new(ParserSym { c: sample }))))
+        pub fn sym(sample: char) -> Expt<Parser, char> {
+            expr(Brz::Sym(Rc::new(ParserSym { c: sample })), Nullability::Reject)
         }
 
         let cases = [
