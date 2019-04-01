@@ -132,7 +132,7 @@ where
     } else {
         return g.0.clone();
     };
-    (&source.fold(start, ashift)).1.clone()
+    source.fold(start, ashift).1.clone()
 }
 
 #[cfg(test)]
