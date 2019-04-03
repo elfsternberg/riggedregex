@@ -34,7 +34,7 @@ type Expt<R, D> = Rc<RefCell<Expr<R, D>>>;
 pub enum Brz<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     Emp,
     Ukn,
@@ -49,7 +49,7 @@ where
 pub struct DerivativeCache<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     token: D,
     derivative: Expt<R, D>,
@@ -65,7 +65,7 @@ pub enum Nullable {
 pub struct Expr<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     expr: Brz<R, D>,
     known_derivative: Option<DerivativeCache<R, D>>,
@@ -77,7 +77,7 @@ where
 impl<R, D> Expr<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     pub fn new(b: Brz<R, D>, n: Nullable) -> Expr<R, D> {
         Expr {
@@ -99,7 +99,7 @@ where
 pub fn expr<R, D>(b: Brz<R, D>, n: Nullable) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     Rc::new(RefCell::new(Expr::new(b, n)))
 }
@@ -107,23 +107,43 @@ where
 pub fn emp<R, D>() -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     expr(Brz::Emp, Nullable::Reject)
+}
+
+pub fn emp_mutate<R, D>(target: &mut Expt<R, D>)
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    target
+        .borrow_mut()
+        .mutate(Brz::Emp, Nullable::Reject);
 }
 
 pub fn eps<R, D>(e: R) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     expr(Brz::Eps(Rc::new(e)), Nullable::Accept)
+}
+
+pub fn eps_mutate<R, D>(target: &mut Expt<R, D>, rig: Rc<R>)
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    target
+        .borrow_mut()
+        .mutate(Brz::Eps(rig.clone()), Nullable::Accept);
 }
 
 pub fn alt<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => r1.clone(),
@@ -135,17 +155,35 @@ where
 pub fn alt_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     target
         .borrow_mut()
         .mutate(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
 }
 
+fn alt_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>) -> bool
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    match (&l.borrow().expr, &r.borrow().expr) {
+        (Brz::Eps(ref leps), Brz::Eps(ref reps)) => {
+            eps_mutate(target, Rc::new((*leps).add(&*reps)));
+            true
+        }
+        
+        _ => {
+            alt_mutate(target, l, r);
+            false
+        }
+    }
+}
+
 pub fn seq<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => emp(),
@@ -157,17 +195,42 @@ where
 pub fn seq_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     target
         .borrow_mut()
         .mutate(Brz::Seq(l.clone(), r.clone()), Nullable::Unvisited);
 }
 
+fn seq_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>) -> bool
+where
+    R: Semiring + 'static,
+    D: PartialEq + Copy,
+{
+    use self::Brz::*;
+    match &l.borrow().expr {
+        Emp => {
+            emp_mutate(target);
+            true
+        }
+
+        Eps(ref rig) => {
+            let closed_rig = rig.clone();
+            red_mutate(target, &r, Rc::new(move |rg| Rc::new(closed_rig.mul(&rg))));
+            true
+        }
+
+        _ => {
+            seq_mutate(target, l, r);
+            false
+        }
+    }
+}
+
 pub fn rep<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     expr(Brz::Rep(r1.clone()), Nullable::Accept)
 }
@@ -175,26 +238,61 @@ where
 pub fn red<R, D>(r: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     let closed_fn = func.clone();
     expr(Brz::Red(r.clone(), closed_fn), Nullable::Unvisited)
 }
 
-pub fn set_red<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>)
+pub fn red_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>)
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     target
         .borrow_mut()
         .mutate(Brz::Red(l.clone(), func), Nullable::Unvisited);
 }
 
+pub fn red_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: &Rc<Fn(&Rc<R>) -> Rc<R>>) -> bool
+where
+    R: Semiring + 'static,
+    D: PartialEq + Copy,
+{
+    use self::Brz::*;
+
+    match &l.borrow().expr {
+        Emp => {
+            emp_mutate(target);
+            true
+        }
+
+        Eps(ref rig) => {
+            let res_rig = func(&*rig);
+            eps_mutate(target, res_rig);
+            true
+        }
+
+        // Given two reductions, create a single reduction that runs
+        // both in composition.
+        Red(ref child, ref gunc) => {
+            let f = func.clone();
+            let g = gunc.clone();
+            red_mutate(target, child, Rc::new(move |ts| f(&g(ts))));
+            true
+        }
+
+        _ => {
+            red_mutate(target, l, func.clone());
+            false
+        }
+    }
+}
+
 pub fn ukn<R, D>() -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     expr(Brz::Ukn, Nullable::Unvisited)
 }
@@ -213,7 +311,7 @@ where
             }
         }
     }
-
+    
     let mut res = match &n.borrow().expr {
         Emp => emp(),
         Eps(_) => emp(),
@@ -222,6 +320,8 @@ where
         Ukn => unreachable!(),
     };
 
+    // This scope is absolutely necessary, as we reborrow this object
+    // later in the same function.
     {
         let mut nbm = n.borrow_mut();
         nbm.known_derivative = Some(DerivativeCache {
@@ -250,9 +350,9 @@ where
                 seq_mutate(&mut res, &dl, r)
             }
         }
-        Alt(l, r) => alt_mutate(&mut res, &derive(&l, c), &derive(&r, c)),
-        Rep(r) => seq_mutate(&mut res, &derive(&r, c), &n.clone()),
-        Red(r, f) => set_red(&mut res, &derive(&r, c), f.clone()),
+        Alt(l, r) => { alt_mutate_optimized(&mut res, &derive(&l, c), &derive(&r, c)); },
+        Rep(r) => { seq_mutate_optimized(&mut res, &derive(&r, c), &n.clone()); },
+        Red(r, f) => { red_mutate_optimized(&mut res, &derive(&r, c), &f.clone()); },
         Ukn => unreachable!(),
     };
 
@@ -321,8 +421,8 @@ where
     }
 
     node.borrow_mut().nullable = Accept;
-    for mut childnode in &node.borrow().listeners {
-        compute_notify_nullable(&mut childnode, status);
+    for childnode in &node.borrow().listeners {
+        compute_notify_nullable(childnode, status);
     }
     node.borrow_mut().listeners.clear();
     true
@@ -353,16 +453,18 @@ where
 pub fn parsenull<R, D>(r: &Expt<R, D>) -> Rc<R>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone,
+    D: PartialEq + Copy,
 {
     use self::Brz::*;
 
-    {
-        if let Some(product) = &r.borrow().product {
-            return product.clone();
-        }
+    if let Some(product) = &r.borrow().product {
+        return product.clone();
     }
 
+    if ! nullable(&r) {
+        return Rc::new(R::zero());
+    }
+    
     let product = match &r.borrow().expr {
         Emp => Rc::new(R::zero()),
         Eps(s) => s.clone(),
@@ -766,4 +868,43 @@ mod tests {
         }
     }
 
+    #[test]
+    fn recursion_loop() {
+        pub fn sym(sample: char) -> Expt<Parser, char> {
+            expr(Brz::Sym(Rc::new(ParserSym{ c: sample })), Nullable::Reject)
+        }
+
+        let ee = seq(&sym('e'), &sym('e'));
+        let mut estar = ukn();
+        let eep = seq(&ee, &estar);
+        let eto = eps(Parser::one());
+        alt_mutate(&mut estar, &eto, &eep);
+        let beer = seq(&sym('b'), &seq(&estar, &sym('r')));
+
+        let cases = [
+            ("br", &beer, "br", Some("br")),
+            ("beer", &beer, "beer", Some("beer")),
+            ("beeeeeer", &beer, "beeeeeer", Some("beeeeeer")),
+            ("bad beeer", &beer, "beeer", None),
+            ("bad bear", &beer, "bear", None)
+        ];
+
+        for (name, case, sample, result) in &cases {
+            println!("{:?}", name);
+            let ret = &parse(case, &mut sample.to_string().chars()).0;
+            match result {
+                Some(r) => {
+                    let v = ret.iter().next();
+                    if let Some(s) = v {
+                        assert_eq!(s, sample);
+                    } else {
+                        panic!("Strings did not match: {:?}, {:?}", r, v);
+                    }
+                    assert_eq!(1, ret.len());
+                }
+                None => assert_eq!(0, ret.len()),
+            }
+        }
+    }
+    
 }
