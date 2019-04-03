@@ -73,10 +73,6 @@ where
     product: Option<Rc<R>>,
     listeners: Vec<Expt<R, D>>,
 }
- 
-pub struct Brzi<R, D>(Rc<RefCell<Brz<R, D>>>, *mut Brz<R, D>, Rc<RefCell<BMeta<R, D>>>)
-where
-    R: Semiring;
 
 impl<R, D> Expr<R, D>
 where
@@ -307,19 +303,6 @@ where
     D: PartialEq + Copy + Clone + 'static,
 {
     use self::Brz::*;
-    match (&*l.borrow(), &*r.borrow()) {
-        (_, Emp) => l.clone(),
-        (Emp, _) => r.clone(),
-        _ => Brzi::new(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited),
-    }
-}
-
-pub fn set_alt<R, D>(target: &mut Brzi<R, D>, l: &Brzi<R, D>, r: &Brzi<R, D>)
-where
-    R: Semiring,
-{
-    target.replace(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
-}
 
     {
         if let Some(kd) = &n.borrow().known_derivative {
@@ -472,15 +455,7 @@ where
     R: Semiring,
     D: PartialEq + Copy,
 {
-    use self::Nullable::*;
-    if ! base_nullable(node, status) {
-        return false;
-    }
-    
-    {
-        let meta = node.meta_mut();
-        meta.nullable = Accept;
-    }
+    use self::Brz::*;
 
     if let Some(product) = &r.borrow().product {
         return product.clone();
@@ -516,15 +491,14 @@ where
     I: Iterator<Item = D>,
 {
     let start = if let Some(c) = source.next() {
-        derive(&b, &c)
+        derive(&r, &c)
     } else {
-            return parsenull(&mut b);
+        return parsenull(r);
     };
-    
-    let innerderive = |b2, c2| derive(&b2, &c2);
-    parsenull(&mut source.fold(start, innerderive))
-}
 
+    let innerderive = |b, c| derive(&b, &c);
+    parsenull(&source.fold(start, innerderive))
+}
 
 #[cfg(test)]
 mod tests {
@@ -537,7 +511,7 @@ mod tests {
     // |_|_\___\__\___/\__, |_||_|_/__\___|
     //                 |___/
 
-    #[derive(Debug, Hash, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     pub struct Recognizer(bool);
 
     impl Semiring for Recognizer {
@@ -665,7 +639,7 @@ mod tests {
         fn index(i: usize) -> S;
     }
 
-    #[derive(Debug, Hash, Clone, Eq, PartialEq)]
+    #[derive(Debug, Clone, Eq, PartialEq)]
     pub enum Leftlong {
         Notfound,            // Zero
         Scanning,            // One
