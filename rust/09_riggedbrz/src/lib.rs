@@ -4,10 +4,10 @@
 //! value describing if the expression matched the string (or not).
 //!
 
+use std::cell::RefCell;
 #[allow(unused_imports)]
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 // Generic type conventions:
 //   R: Our Ring Type
@@ -29,55 +29,55 @@ where
     fn is(&self, c: &D) -> R;
 }
 
+type Expt<R, D> = Rc<RefCell<Expr<R, D>>>;
+
 pub enum Brz<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     Emp,
     Ukn,
     Eps(Rc<R>),
     Sym(Rc<Sym<R, D>>),
-    Del(Rc<RefCell<Expr<R, D>>>),
-    Alt(Rc<RefCell<Expr<R, D>>>, Rc<RefCell<Expr<R, D>>>),
-    Seq(Rc<RefCell<Expr<R, D>>>, Rc<RefCell<Expr<R, D>>>),
-    Rep(Rc<RefCell<Expr<R, D>>>),
+    Alt(Expt<R, D>, Expt<R, D>),
+    Seq(Expt<R, D>, Expt<R, D>),
+    Red(Expt<R, D>, Rc<Fn(&Rc<R>) -> Rc<R>>),
+    Rep(Expt<R, D>),
 }
 
 pub struct DerivativeCache<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     token: D,
-    derivative: Expt<R, D>
+    derivative: Expt<R, D>,
 }
-    
+
 pub enum Nullable {
     Accept,
     Reject,
     InProgress,
-    Unvisited
+    Unvisited,
 }
-
-type Expt<R, D> = Rc<RefCell<Expr<R, D>>>;
 
 pub struct Expr<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     expr: Brz<R, D>,
     known_derivative: Option<DerivativeCache<R, D>>,
     nullable: Nullable,
     product: Option<Rc<R>>,
-    listeners: Vec<Expt<R, D>>
+    listeners: Vec<Expt<R, D>>,
 }
 
 impl<R, D> Expr<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     pub fn new(b: Brz<R, D>, n: Nullable) -> Expr<R, D> {
         Expr {
@@ -99,7 +99,7 @@ where
 pub fn expr<R, D>(b: Brz<R, D>, n: Nullable) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     Rc::new(RefCell::new(Expr::new(b, n)))
 }
@@ -107,7 +107,7 @@ where
 pub fn emp<R, D>() -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     expr(Brz::Emp, Nullable::Reject)
 }
@@ -115,7 +115,7 @@ where
 pub fn eps<R, D>(e: R) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     expr(Brz::Eps(Rc::new(e)), Nullable::Accept)
 }
@@ -123,7 +123,7 @@ where
 pub fn alt<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => r1.clone(),
@@ -132,18 +132,20 @@ where
     }
 }
 
-pub fn alt_replace<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
+pub fn alt_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
-    target.borrow_mut().mutate(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
+    target
+        .borrow_mut()
+        .mutate(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
 }
 
 pub fn seq<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     match (&r1.borrow().expr, &r2.borrow().expr) {
         (_, Brz::Emp) => emp(),
@@ -152,41 +154,203 @@ where
     }
 }
 
-pub fn seq_replace<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
+pub fn seq_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
-    target.borrow_mut().mutate(Brz::Seq(l.clone(), r.clone()), Nullable::Unvisited);
+    target
+        .borrow_mut()
+        .mutate(Brz::Seq(l.clone(), r.clone()), Nullable::Unvisited);
 }
-
 
 pub fn rep<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     expr(Brz::Rep(r1.clone()), Nullable::Accept)
 }
 
-pub fn del<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
+pub fn red<R, D>(r: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
-    expr(Brz::Del(r1.clone()), Nullable::Reject)
+    let closed_fn = func.clone();
+    expr(Brz::Red(r.clone(), closed_fn), Nullable::Unvisited)
+}
+
+pub fn set_red<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>)
+where
+    R: Semiring,
+    D: PartialEq + Copy + Clone,
+{
+    target
+        .borrow_mut()
+        .mutate(Brz::Red(l.clone(), func), Nullable::Unvisited);
 }
 
 pub fn ukn<R, D>() -> Expt<R, D>
 where
     R: Semiring,
-    D: PartialEq + Copy + Clone
+    D: PartialEq + Copy + Clone,
 {
     expr(Brz::Ukn, Nullable::Unvisited)
 }
 
-
 pub fn derive<R, D>(n: &Expt<R, D>, c: &D) -> Expt<R, D>
+where
+    R: Semiring + 'static,
+    D: PartialEq + Copy + Clone + 'static,
+{
+    use self::Brz::*;
+
+    {
+        if let Some(kd) = &n.borrow().known_derivative {
+            if kd.token == *c {
+                return kd.derivative.clone();
+            }
+        }
+    }
+
+    let mut res = match &n.borrow().expr {
+        Emp => emp(),
+        Eps(_) => emp(),
+        Sym(f) => eps(f.is(c)),
+        Seq(_, _) | Red(_, _) | Alt(_, _) | Rep(_) => ukn(),
+        Ukn => unreachable!(),
+    };
+
+    {
+        let mut nbm = n.borrow_mut();
+        nbm.known_derivative = Some(DerivativeCache {
+            token: *c,
+            derivative: res.clone(),
+        })
+    }
+
+    match &n.borrow().expr {
+        Emp | Eps(_) | Sym(_) => {}
+        Seq(l, r) => {
+            if nullable(l) {
+                let dl = derive(l, c);
+                let dr = derive(r, c);
+                let cont_l = l.clone();
+                let red = red(
+                    &dr,
+                    Rc::new(move |ts2| {
+                        let ts1 = &parsenull(&cont_l);
+                        Rc::new(ts1.mul(ts2))
+                    }),
+                );
+                alt_mutate(&mut res, &red, &seq(&dl, r))
+            } else {
+                let dl = derive(l, c);
+                seq_mutate(&mut res, &dl, r)
+            }
+        }
+        Alt(l, r) => alt_mutate(&mut res, &derive(&l, c), &derive(&r, c)),
+        Rep(r) => seq_mutate(&mut res, &derive(&r, c), &n.clone()),
+        Red(r, f) => set_red(&mut res, &derive(&r, c), f.clone()),
+        Ukn => unreachable!(),
+    };
+
+    res
+}
+
+pub fn nullable<R, D>(node: &Expt<R, D>) -> bool
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    cached_nullable(&node, None, &Nullable::Unvisited)
+}
+
+pub fn maybe_add_listener<R, D>(parent: Option<&Expt<R, D>>, node: &Expt<R, D>)
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    if let Some(parent) = parent {
+        node.borrow_mut().listeners.push(parent.clone());
+    }
+}
+
+fn cached_nullable<R, D>(node: &Expt<R, D>, parent: Option<&Expt<R, D>>, status: &Nullable) -> bool
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    use self::Nullable::*;
+
+    // Sorry about this; this dance is necessary to prevent a
+    // borrow/borrow exception.
+
+    let addparent = {
+        match &node.borrow().nullable {
+            Accept => return true,
+            Reject | InProgress => true,
+            Unvisited => false,
+        }
+    };
+
+    if addparent {
+        maybe_add_listener(parent, node);
+        return false;
+    }
+
+    node.borrow_mut().nullable = InProgress;
+
+    if compute_notify_nullable(node, status) {
+        true
+    } else {
+        maybe_add_listener(parent, node);
+        false
+    }
+}
+
+fn compute_notify_nullable<R, D>(node: &Expt<R, D>, status: &Nullable) -> bool
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    use self::Nullable::*;
+    if !base_nullable(node, status) {
+        return false;
+    }
+
+    node.borrow_mut().nullable = Accept;
+    for mut childnode in &node.borrow().listeners {
+        compute_notify_nullable(&mut childnode, status);
+    }
+    node.borrow_mut().listeners.clear();
+    true
+}
+
+fn base_nullable<R, D>(node: &Expt<R, D>, status: &Nullable) -> bool
+where
+    R: Semiring,
+    D: PartialEq + Copy,
+{
+    use self::Brz::*;
+    match &node.borrow().expr {
+        Emp => false,
+        Eps(_) => true,
+        Sym(_) => false,
+        Rep(_) => true,
+        Alt(cl, cr) => {
+            cached_nullable(&cl, Some(node), status) || cached_nullable(&cr, Some(node), status)
+        }
+        Seq(cl, cr) => {
+            cached_nullable(&cl, Some(node), status) && cached_nullable(&cr, Some(node), status)
+        }
+        Red(cl, _) => cached_nullable(&cl, Some(node), status),
+        Ukn => unreachable!(),
+    }
+}
+
+pub fn parsenull<R, D>(r: &Expt<R, D>) -> Rc<R>
 where
     R: Semiring,
     D: PartialEq + Copy + Clone,
@@ -194,77 +358,25 @@ where
     use self::Brz::*;
 
     {
-        if let Some(kd) = &n.borrow().known_derivative {
-            if kd.token == *c {
-                return kd.derivative.clone()
-            }
-        }
-    }
-    
-    let mut res = match &n.borrow().expr {
-        Emp => emp(),
-        Eps(_) => emp(),
-        Del(_) => emp(),
-        Sym(f) => eps(f.is(c)),
-        Seq(_, _)
-            | Alt(_, _)
-            | Rep(_) => ukn(),
-        Ukn => unreachable!()
-    };
-
-    {
-        let mut nbm = n.borrow_mut();
-        nbm.known_derivative = Some(DerivativeCache {
-            token: *c,
-            derivative: res.clone()
-        })
-    }
-
-    match &n.borrow().expr {
-        Emp
-            | Eps(_)
-            | Del(_)
-            | Sym(_) => {},
-        Seq(l, r) => {
-            let dl = seq(&derive(&l, c), &r);
-            let dr = seq(&del(&l), &derive(&r, c));
-            alt_replace(&mut res, &dl, &dr)
-        }
-        Alt(l, r) => alt_replace(&mut res, &derive(&l, c), &derive(&r, c)),
-        Rep(r) => seq_replace(&mut res, &derive(&r, c), &n.clone()),
-        Ukn => unreachable!()
-    };
-    
-    res
-}
-
-pub fn parsenull<R, D>(r: &Expt<R, D>) -> Rc<R>
-where
-    R: Semiring + Clone,
-    D: PartialEq + Copy + Clone
-{
-    use self::Brz::*;
-
-    {
         if let Some(product) = &r.borrow().product {
-            return product.clone()
+            return product.clone();
         }
     }
 
     let product = match &r.borrow().expr {
         Emp => Rc::new(R::zero()),
         Eps(s) => s.clone(),
-        Del(s) => parsenull(&s),
+        Red(c, f) => f(&parsenull(c)),
         Rep(_) => Rc::new(R::one()),
         Sym(_) => Rc::new(R::zero()),
         Seq(l, r) => Rc::new(parsenull(&l).mul(&parsenull(&r))),
         Alt(l, r) => Rc::new(parsenull(&l).add(&parsenull(&r))),
-        Ukn       => unreachable!(),
+        Ukn => unreachable!(),
     };
 
     {
         let mut nbm = r.borrow_mut();
-        nbm.product= Some(product.clone());
+        nbm.product = Some(product.clone());
     }
 
     product
@@ -272,8 +384,8 @@ where
 
 pub fn parse<R, D, I>(r: &Expt<R, D>, source: &mut I) -> Rc<R>
 where
-    R: Semiring + Clone,
-    D: PartialEq + Copy + Clone,
+    R: Semiring + 'static,
+    D: PartialEq + Copy + Clone + 'static,
     I: Iterator<Item = D>,
 {
     let start = if let Some(c) = source.next() {
