@@ -43,7 +43,6 @@ where
     Alt(Expt<R, D>, Expt<R, D>),
     Seq(Expt<R, D>, Expt<R, D>),
     Red(Expt<R, D>, Rc<Fn(&Rc<R>) -> Rc<R>>),
-    Rep(Expt<R, D>),
 }
 
 pub struct DerivativeCache<R, D>
@@ -320,7 +319,7 @@ where
         Emp => emp(),
         Eps(_) => emp(),
         Sym(f) => eps(f.is(c)),
-        Seq(_, _) | Red(_, _) | Alt(_, _) | Rep(_) => ukn(),
+        Seq(_, _) | Red(_, _) | Alt(_, _) => ukn(),
         Ukn => unreachable!(),
     };
 
@@ -351,11 +350,10 @@ where
                 alt_mutate(&mut res, &red, &seq(&dl, r))
             } else {
                 let dl = derive(l, c);
-                seq_mutate(&mut res, &dl, r)
+                seq_mutate_optimized(&mut res, &dl, r);
             }
         }
         Alt(l, r) => { alt_mutate_optimized(&mut res, &derive(&l, c), &derive(&r, c)); },
-        Rep(r) => { seq_mutate_optimized(&mut res, &derive(&r, c), &n.clone()); },
         Red(r, f) => { red_mutate_optimized(&mut res, &derive(&r, c), &f.clone()); },
         Ukn => unreachable!(),
     };
@@ -442,7 +440,6 @@ where
         Emp => false,
         Eps(_) => true,
         Sym(_) => false,
-        Rep(_) => true,
         Alt(cl, cr) => {
             cached_nullable(&cl, Some(node), status) || cached_nullable(&cr, Some(node), status)
         }
@@ -473,7 +470,6 @@ where
         Emp => Rc::new(R::zero()),
         Eps(s) => s.clone(),
         Red(c, f) => f(&parsenull(c)),
-        Rep(_) => Rc::new(R::one()),
         Sym(_) => Rc::new(R::zero()),
         Seq(l, r) => Rc::new(parsenull(&l).mul(&parsenull(&r))),
         Alt(l, r) => Rc::new(parsenull(&l).add(&parsenull(&r))),
