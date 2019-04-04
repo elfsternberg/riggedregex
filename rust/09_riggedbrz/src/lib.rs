@@ -232,7 +232,11 @@ where
     R: Semiring,
     D: PartialEq + Copy,
 {
-    expr(Brz::Rep(r1.clone()), Nullable::Accept)
+    let mut rstar = ukn();
+    // r* = ε | r ⊗ r*
+    let right = seq(&r1.clone(), &rstar.clone());
+    alt_mutate(&mut rstar, &eps(R::one()), &right);
+    rstar
 }
 
 pub fn red<R, D>(r: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Expt<R, D>
