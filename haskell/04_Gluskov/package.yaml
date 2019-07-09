@@ -7,7 +7,7 @@ license-file:        LICENSE
 author:              Elf M. Sternberg
 maintainer:          elf.sternberg@gmail.com
 copyright:           Copyright ⓒ 2019 Elf M. Sternberg
-category:            Web
+category:            Regex
 build-type:          Simple
 extra-source-files:  README.md
 
