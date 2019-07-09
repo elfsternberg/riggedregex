@@ -24,7 +24,7 @@ data Case = Case
   , result      :: Bool
   }
 
-symf :: Char -> Brz::Sym
+symf :: Char -> Brz
 symf c = Sym (\u -> c == u)
   
 -- let nocs = Rep ( Alt ( Sym 'a' ) ( Sym 'b' ) )
