@@ -5,8 +5,6 @@
 //!
 
 use std::cell::RefCell;
-#[allow(unused_imports)]
-use std::collections::HashSet;
 use std::rc::Rc;
 
 // Generic type conventions:
@@ -14,758 +12,761 @@ use std::rc::Rc;
 //   D: Our inbound Data type
 //   I: An Iterator type
 
-pub trait Semiring {
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn is_zero(&self) -> bool;
-    fn mul(&self, rhs: &Self) -> Self;
-    fn add(&self, rhs: &Self) -> Self;
+pub trait Rig {
+	fn zero() -> Self;
+	fn one() -> Self;
+	fn is_zero(&self) -> bool;
+	fn mul(&self, rhs: &Self) -> Self;
+	fn add(&self, rhs: &Self) -> Self;
 }
 
-pub trait Sym<R, D>
-where
-    R: Semiring,
-{
-    fn is(&self, c: &D) -> R;
+pub trait Sym<Rig, Symbol> {
+	fn is(&self, c: &Symbol) -> Rig;
 }
 
-type Expt<R, D> = Rc<RefCell<Expr<R, D>>>;
+type RcExpr<Rig, Symbol> = Rc<RefCell<Expr<Rig, Symbol>>>;
 
-pub enum Brz<R, D>
+pub enum Brz<R: Rig, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    Emp,
-    Ukn,
-    Eps(Rc<R>),
-    Sym(Rc<Sym<R, D>>),
-    Alt(Expt<R, D>, Expt<R, D>),
-    Seq(Expt<R, D>, Expt<R, D>),
-    Red(Expt<R, D>, Rc<Fn(&Rc<R>) -> Rc<R>>),
+	Emp,
+	Ukn,
+	Eps(Rc<R>),
+	Sym(Rc<dyn Sym<R, Symbol>>),
+	Alt(RcExpr<R, Symbol>, RcExpr<R, Symbol>),
+	Seq(RcExpr<R, Symbol>, RcExpr<R, Symbol>),
+	Red(RcExpr<R, Symbol>, Rc<dyn Fn(&Rc<R>) -> Rc<R>>),
 }
 
-pub struct DerivativeCache<R, D>
+pub struct DerivativeCache<R: Rig, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    token: D,
-    derivative: Expt<R, D>,
+	token: Symbol,
+	derivative: RcExpr<R, Symbol>,
 }
 
 pub enum Nullable {
-    Accept,
-    Reject,
-    InProgress,
-    Unvisited,
+	Accept,
+	Reject,
+	InProgress,
+	Unvisited,
 }
 
-pub struct Expr<R, D>
+pub struct Expr<R: Rig, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    expr: Brz<R, D>,
-    known_derivative: Option<DerivativeCache<R, D>>,
-    nullable: Nullable,
-    product: Option<Rc<R>>,
-    listeners: Vec<Expt<R, D>>,
+	expr: Brz<R, Symbol>,
+	known_derivative: Option<DerivativeCache<R, Symbol>>,
+	nullable: Nullable,
+	product: Option<Rc<R>>,
+	listeners: Vec<RcExpr<R, Symbol>>,
 }
 
-impl<R, D> Expr<R, D>
+impl<R: Rig, Symbol> Expr<R, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    pub fn new(b: Brz<R, D>, n: Nullable) -> Expr<R, D> {
-        Expr {
-            expr: b,
-            known_derivative: None,
-            nullable: n,
-            product: None,
-            listeners: Vec::new(),
-        }
-    }
+	pub fn new(b: Brz<R, Symbol>, n: Nullable) -> Expr<R, Symbol> {
+		Expr {
+			expr: b,
+			known_derivative: None,
+			nullable: n,
+			product: None,
+			listeners: Vec::new(),
+		}
+	}
 
-    pub fn mutate(&mut self, b: Brz<R, D>, n: Nullable) {
-        self.expr = b;
-        self.nullable = n;
-    }
+	pub fn mutate(&mut self, b: Brz<R, Symbol>, n: Nullable) {
+		self.expr = b;
+		self.nullable = n;
+	}
 }
 
 #[inline]
-pub fn expr<R, D>(b: Brz<R, D>, n: Nullable) -> Expt<R, D>
+pub fn expr<R: Rig, Symbol>(b: Brz<R, Symbol>, n: Nullable) -> RcExpr<R, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    Rc::new(RefCell::new(Expr::new(b, n)))
+	Rc::new(RefCell::new(Expr::new(b, n)))
 }
 
-pub fn emp<R, D>() -> Expt<R, D>
+pub fn emp<R: Rig, Symbol>() -> RcExpr<R, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    expr(Brz::Emp, Nullable::Reject)
+	expr(Brz::Emp, Nullable::Reject)
 }
 
-pub fn emp_mutate<R, D>(target: &mut Expt<R, D>)
+pub fn emp_mutate<R: Rig, Symbol>(target: &mut RcExpr<R, Symbol>)
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    target
-        .borrow_mut()
-        .mutate(Brz::Emp, Nullable::Reject);
+	target.borrow_mut().mutate(Brz::Emp, Nullable::Reject);
 }
 
-pub fn eps<R, D>(e: R) -> Expt<R, D>
+pub fn eps<R: Rig, Symbol>(e: R) -> RcExpr<R, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    expr(Brz::Eps(Rc::new(e)), Nullable::Accept)
+	expr(Brz::Eps(Rc::new(e)), Nullable::Accept)
 }
 
-pub fn eps_mutate<R, D>(target: &mut Expt<R, D>, rig: Rc<R>)
+pub fn eps_mutate<R: Rig, Symbol>(target: &mut RcExpr<R, Symbol>, rig: Rc<R>)
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    target
-        .borrow_mut()
-        .mutate(Brz::Eps(rig.clone()), Nullable::Accept);
+	target
+		.borrow_mut()
+		.mutate(Brz::Eps(rig.clone()), Nullable::Accept);
 }
 
-pub fn alt<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
+pub fn alt<R: Rig, Symbol>(r1: &RcExpr<R, Symbol>, r2: &RcExpr<R, Symbol>) -> RcExpr<R, Symbol>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	Symbol: PartialEq + Copy,
 {
-    match (&r1.borrow().expr, &r2.borrow().expr) {
-        (_, Brz::Emp) => r1.clone(),
-        (Brz::Emp, _) => r2.clone(),
-        _ => expr(Brz::Alt(r1.clone(), r2.clone()), Nullable::Unvisited),
-    }
+	match (&r1.borrow().expr, &r2.borrow().expr) {
+		(_, Brz::Emp) => r1.clone(),
+		(Brz::Emp, _) => r2.clone(),
+		_ => expr(Brz::Alt(r1.clone(), r2.clone()), Nullable::Unvisited),
+	}
 }
 
-pub fn alt_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
-where
-    R: Semiring,
-    D: PartialEq + Copy,
+pub fn alt_mutate<R: Rig, Symbol>(
+	target: &mut RcExpr<R, Symbol>,
+	l: &RcExpr<R, Symbol>,
+	r: &RcExpr<R, Symbol>,
+) where
+	Symbol: PartialEq + Copy,
 {
-    target
-        .borrow_mut()
-        .mutate(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
+	target
+		.borrow_mut()
+		.mutate(Brz::Alt(l.clone(), r.clone()), Nullable::Unvisited);
 }
 
-fn alt_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>) -> bool
+fn alt_mutate_optimized<R, D>(target: &mut RcExpr<R, D>, l: &RcExpr<R, D>, r: &RcExpr<R, D>) -> bool
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    match (&l.borrow().expr, &r.borrow().expr) {
-        (Brz::Eps(ref leps), Brz::Eps(ref reps)) => {
-            eps_mutate(target, Rc::new((*leps).add(&*reps)));
-            true
-        }
-        
-        _ => {
-            alt_mutate(target, l, r);
-            false
-        }
-    }
+	match (&l.borrow().expr, &r.borrow().expr) {
+		(Brz::Eps(ref leps), Brz::Eps(ref reps)) => {
+			eps_mutate(target, Rc::new((*leps).add(&*reps)));
+			true
+		}
+
+		_ => {
+			alt_mutate(target, l, r);
+			false
+		}
+	}
 }
 
-pub fn seq<R, D>(r1: &Expt<R, D>, r2: &Expt<R, D>) -> Expt<R, D>
+pub fn seq<R, D>(r1: &RcExpr<R, D>, r2: &RcExpr<R, D>) -> RcExpr<R, D>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    match (&r1.borrow().expr, &r2.borrow().expr) {
-        (_, Brz::Emp) => emp(),
-        (Brz::Emp, _) => emp(),
-        _ => expr(Brz::Seq(r1.clone(), r2.clone()), Nullable::Unvisited),
-    }
+	match (&r1.borrow().expr, &r2.borrow().expr) {
+		(_, Brz::Emp) => emp(),
+		(Brz::Emp, _) => emp(),
+		_ => expr(Brz::Seq(r1.clone(), r2.clone()), Nullable::Unvisited),
+	}
 }
 
-pub fn seq_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>)
+pub fn seq_mutate<R, D>(target: &mut RcExpr<R, D>, l: &RcExpr<R, D>, r: &RcExpr<R, D>)
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    target
-        .borrow_mut()
-        .mutate(Brz::Seq(l.clone(), r.clone()), Nullable::Unvisited);
+	target
+		.borrow_mut()
+		.mutate(Brz::Seq(l.clone(), r.clone()), Nullable::Unvisited);
 }
 
-fn seq_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, r: &Expt<R, D>) -> bool
+fn seq_mutate_optimized<R, D>(target: &mut RcExpr<R, D>, l: &RcExpr<R, D>, r: &RcExpr<R, D>) -> bool
 where
-    R: Semiring + 'static,
-    D: PartialEq + Copy,
+	R: Rig + 'static,
+	D: PartialEq + Copy,
 {
-    use self::Brz::*;
-    match &l.borrow().expr {
-        Emp => {
-            emp_mutate(target);
-            true
-        }
+	use self::Brz::*;
+	match &l.borrow().expr {
+		Emp => {
+			emp_mutate(target);
+			true
+		}
 
-        Eps(ref rig) => {
-            let closed_rig = rig.clone();
-            red_mutate(target, &r, Rc::new(move |rg| Rc::new(closed_rig.mul(&rg))));
-            true
-        }
+		Eps(ref rig) => {
+			let closed_rig = rig.clone();
+			red_mutate(target, &r, Rc::new(move |rg| Rc::new(closed_rig.mul(&rg))));
+			true
+		}
 
-        _ => {
-            seq_mutate(target, l, r);
-            false
-        }
-    }
+		_ => {
+			seq_mutate(target, l, r);
+			false
+		}
+	}
 }
 
-pub fn rep<R, D>(r1: &Expt<R, D>) -> Expt<R, D>
+pub fn rep<R, D>(r1: &RcExpr<R, D>) -> RcExpr<R, D>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    let mut rstar = ukn();
-    // r* = ε | r ⊗ r*
-    let right = seq(&r1.clone(), &rstar.clone());
-    alt_mutate(&mut rstar, &eps(R::one()), &right);
-    rstar
+	let mut rstar = ukn();
+	// r* = ε | r ⊗ r*
+	let right = seq(&r1.clone(), &rstar.clone());
+	alt_mutate(&mut rstar, &eps(R::one()), &right);
+	rstar
 }
 
-pub fn red<R, D>(r: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>) -> Expt<R, D>
+pub fn red<R, D>(r: &RcExpr<R, D>, func: Rc<dyn Fn(&Rc<R>) -> Rc<R>>) -> RcExpr<R, D>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    let closed_fn = func.clone();
-    expr(Brz::Red(r.clone(), closed_fn), Nullable::Unvisited)
+	let closed_fn = func.clone();
+	expr(Brz::Red(r.clone(), closed_fn), Nullable::Unvisited)
 }
 
-pub fn red_mutate<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: Rc<Fn(&Rc<R>) -> Rc<R>>)
-where
-    R: Semiring,
-    D: PartialEq + Copy,
+pub fn red_mutate<R, D>(
+	target: &mut RcExpr<R, D>,
+	l: &RcExpr<R, D>,
+	func: Rc<dyn Fn(&Rc<R>) -> Rc<R>>,
+) where
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    target
-        .borrow_mut()
-        .mutate(Brz::Red(l.clone(), func), Nullable::Unvisited);
+	target
+		.borrow_mut()
+		.mutate(Brz::Red(l.clone(), func), Nullable::Unvisited);
 }
 
-pub fn red_mutate_optimized<R, D>(target: &mut Expt<R, D>, l: &Expt<R, D>, func: &Rc<Fn(&Rc<R>) -> Rc<R>>) -> bool
+pub fn red_mutate_optimized<R, D>(
+	target: &mut RcExpr<R, D>,
+	l: &RcExpr<R, D>,
+	func: &Rc<dyn Fn(&Rc<R>) -> Rc<R>>,
+) -> bool
 where
-    R: Semiring + 'static,
-    D: PartialEq + Copy,
+	R: Rig + 'static,
+	D: PartialEq + Copy,
 {
-    use self::Brz::*;
+	use self::Brz::*;
 
-    match &l.borrow().expr {
-        Emp => {
-            emp_mutate(target);
-            true
-        }
+	match &l.borrow().expr {
+		Emp => {
+			emp_mutate(target);
+			true
+		}
 
-        Eps(ref rig) => {
-            let res_rig = func(&*rig);
-            eps_mutate(target, res_rig);
-            true
-        }
+		Eps(ref rig) => {
+			let res_rig = func(&*rig);
+			eps_mutate(target, res_rig);
+			true
+		}
 
-        // Given two reductions, create a single reduction that runs
-        // both in composition.
-        Red(ref child, ref gunc) => {
-            let f = func.clone();
-            let g = gunc.clone();
-            red_mutate(target, child, Rc::new(move |ts| f(&g(ts))));
-            true
-        }
+		// Given two reductions, create a single reduction that runs
+		// both in composition.
+		Red(ref child, ref gunc) => {
+			let f = func.clone();
+			let g = gunc.clone();
+			red_mutate(target, child, Rc::new(move |ts| f(&g(ts))));
+			true
+		}
 
-        _ => {
-            red_mutate(target, l, func.clone());
-            false
-        }
-    }
+		_ => {
+			red_mutate(target, l, func.clone());
+			false
+		}
+	}
 }
 
-pub fn ukn<R, D>() -> Expt<R, D>
+pub fn ukn<R, D>() -> RcExpr<R, D>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    expr(Brz::Ukn, Nullable::Unvisited)
+	expr(Brz::Ukn, Nullable::Unvisited)
 }
 
-pub fn derive<R, D>(n: &Expt<R, D>, c: &D) -> Expt<R, D>
+pub fn derive<R, D>(n: &RcExpr<R, D>, c: &D) -> RcExpr<R, D>
 where
-    R: Semiring + 'static,
-    D: PartialEq + Copy + Clone + 'static,
+	R: Rig + 'static,
+	D: PartialEq + Copy + Clone + 'static,
 {
-    use self::Brz::*;
+	use self::Brz::*;
 
-    {
-        if let Some(kd) = &n.borrow().known_derivative {
-            if kd.token == *c {
-                return kd.derivative.clone();
-            }
-        }
-    }
-    
-    let mut res = match &n.borrow().expr {
-        Emp => emp(),
-        Eps(_) => emp(),
-        Sym(f) => eps(f.is(c)),
-        Seq(_, _) | Red(_, _) | Alt(_, _) => ukn(),
-        Ukn => unreachable!(),
-    };
+	{
+		if let Some(kd) = &n.borrow().known_derivative {
+			if kd.token == *c {
+				return kd.derivative.clone();
+			}
+		}
+	}
 
-    // This scope is absolutely necessary, as we reborrow this object
-    // later in the same function.
-    {
-        let mut nbm = n.borrow_mut();
-        nbm.known_derivative = Some(DerivativeCache {
-            token: *c,
-            derivative: res.clone(),
-        })
-    }
+	let mut res = match &n.borrow().expr {
+		Emp => emp(),
+		Eps(_) => emp(),
+		Sym(f) => eps(f.is(c)),
+		Seq(_, _) | Red(_, _) | Alt(_, _) => ukn(),
+		Ukn => unreachable!(),
+	};
 
-    match &n.borrow().expr {
-        Emp | Eps(_) | Sym(_) => {}
-        Seq(l, r) => {
-            if nullable(l) {
-                let dl = derive(l, c);
-                let dr = derive(r, c);
-                let cont_l = l.clone();
-                let red = red(
-                    &dr,
-                    Rc::new(move |ts2| {
-                        let ts1 = &parsenull(&cont_l);
-                        Rc::new(ts1.mul(ts2))
-                    }),
-                );
-                alt_mutate(&mut res, &red, &seq(&dl, r))
-            } else {
-                let dl = derive(l, c);
-                seq_mutate_optimized(&mut res, &dl, r);
-            }
-        }
-        Alt(l, r) => { alt_mutate_optimized(&mut res, &derive(&l, c), &derive(&r, c)); },
-        Red(r, f) => { red_mutate_optimized(&mut res, &derive(&r, c), &f.clone()); },
-        Ukn => unreachable!(),
-    };
+	// This scope is absolutely necessary, as we reborrow this object
+	// later in the same function.
+	{
+		let mut nbm = n.borrow_mut();
+		nbm.known_derivative = Some(DerivativeCache {
+			token: *c,
+			derivative: res.clone(),
+		})
+	}
 
-    res
+	match &n.borrow().expr {
+		Emp | Eps(_) | Sym(_) => {}
+		Seq(l, r) => {
+			if nullable(l) {
+				let dl = derive(l, c);
+				let dr = derive(r, c);
+				let cont_l = l.clone();
+				let red = red(
+					&dr,
+					Rc::new(move |ts2| {
+						let ts1 = &parsenull(&cont_l);
+						Rc::new(ts1.mul(ts2))
+					}),
+				);
+				alt_mutate(&mut res, &red, &seq(&dl, r))
+			} else {
+				let dl = derive(l, c);
+				seq_mutate_optimized(&mut res, &dl, r);
+			}
+		}
+		Alt(l, r) => {
+			alt_mutate_optimized(&mut res, &derive(&l, c), &derive(&r, c));
+		}
+		Red(r, f) => {
+			red_mutate_optimized(&mut res, &derive(&r, c), &f.clone());
+		}
+		Ukn => unreachable!(),
+	};
+
+	res
 }
 
-pub fn nullable<R, D>(node: &Expt<R, D>) -> bool
+pub fn nullable<R, D>(node: &RcExpr<R, D>) -> bool
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    cached_nullable(&node, None, &Nullable::Unvisited)
+	cached_nullable(&node, None, &Nullable::Unvisited)
 }
 
-pub fn maybe_add_listener<R, D>(parent: Option<&Expt<R, D>>, node: &Expt<R, D>)
+pub fn maybe_add_listener<R, D>(parent: Option<&RcExpr<R, D>>, node: &RcExpr<R, D>)
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    if let Some(parent) = parent {
-        node.borrow_mut().listeners.push(parent.clone());
-    }
+	if let Some(parent) = parent {
+		node.borrow_mut().listeners.push(parent.clone());
+	}
 }
 
-fn cached_nullable<R, D>(node: &Expt<R, D>, parent: Option<&Expt<R, D>>, status: &Nullable) -> bool
+fn cached_nullable<R, D>(
+	node: &RcExpr<R, D>,
+	parent: Option<&RcExpr<R, D>>,
+	status: &Nullable,
+) -> bool
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    use self::Nullable::*;
+	use self::Nullable::*;
 
-    // Sorry about this; this dance is necessary to prevent a
-    // borrow/borrow exception.
+	// Sorry about this; this dance is necessary to prevent a
+	// borrow/borrow exception.
 
-    let addparent = {
-        match &node.borrow().nullable {
-            Accept => return true,
-            Reject | InProgress => true,
-            Unvisited => false,
-        }
-    };
+	let addparent = {
+		match &node.borrow().nullable {
+			Accept => return true,
+			Reject | InProgress => true,
+			Unvisited => false,
+		}
+	};
 
-    if addparent {
-        maybe_add_listener(parent, node);
-        return false;
-    }
+	if addparent {
+		maybe_add_listener(parent, node);
+		return false;
+	}
 
-    node.borrow_mut().nullable = InProgress;
+	node.borrow_mut().nullable = InProgress;
 
-    if compute_notify_nullable(node, status) {
-        true
-    } else {
-        maybe_add_listener(parent, node);
-        false
-    }
+	if compute_notify_nullable(node, status) {
+		true
+	} else {
+		maybe_add_listener(parent, node);
+		false
+	}
 }
 
-fn compute_notify_nullable<R, D>(node: &Expt<R, D>, status: &Nullable) -> bool
+fn compute_notify_nullable<R, D>(node: &RcExpr<R, D>, status: &Nullable) -> bool
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    use self::Nullable::*;
-    if !base_nullable(node, status) {
-        return false;
-    }
+	use self::Nullable::*;
+	if !base_nullable(node, status) {
+		return false;
+	}
 
-    node.borrow_mut().nullable = Accept;
-    for childnode in &node.borrow().listeners {
-        compute_notify_nullable(childnode, status);
-    }
-    node.borrow_mut().listeners.clear();
-    true
+	node.borrow_mut().nullable = Accept;
+	for parentnode in &node.borrow().listeners {
+		compute_notify_nullable(parentnode, status);
+	}
+	node.borrow_mut().listeners.clear();
+	true
 }
 
-fn base_nullable<R, D>(node: &Expt<R, D>, status: &Nullable) -> bool
+fn base_nullable<R, D>(node: &RcExpr<R, D>, status: &Nullable) -> bool
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    use self::Brz::*;
-    match &node.borrow().expr {
-        Emp => false,
-        Eps(_) => true,
-        Sym(_) => false,
-        Alt(cl, cr) => {
-            cached_nullable(&cl, Some(node), status) || cached_nullable(&cr, Some(node), status)
-        }
-        Seq(cl, cr) => {
-            cached_nullable(&cl, Some(node), status) && cached_nullable(&cr, Some(node), status)
-        }
-        Red(cl, _) => cached_nullable(&cl, Some(node), status),
-        Ukn => unreachable!(),
-    }
+	use self::Brz::*;
+	match &node.borrow().expr {
+		Emp => false,
+		Eps(_) => true,
+		Sym(_) => false,
+		Alt(cl, cr) => {
+			cached_nullable(&cl, Some(node), status) || cached_nullable(&cr, Some(node), status)
+		}
+		Seq(cl, cr) => {
+			cached_nullable(&cl, Some(node), status) && cached_nullable(&cr, Some(node), status)
+		}
+		Red(cl, _) => cached_nullable(&cl, Some(node), status),
+		Ukn => unreachable!(),
+	}
 }
 
-pub fn parsenull<R, D>(r: &Expt<R, D>) -> Rc<R>
+pub fn parsenull<R, D>(r: &RcExpr<R, D>) -> Rc<R>
 where
-    R: Semiring,
-    D: PartialEq + Copy,
+	R: Rig,
+	D: PartialEq + Copy,
 {
-    use self::Brz::*;
+	use self::Brz::*;
 
-    if let Some(product) = &r.borrow().product {
-        return product.clone();
-    }
+	if let Some(product) = &r.borrow().product {
+		return product.clone();
+	}
 
-    if ! nullable(&r) {
-        return Rc::new(R::zero());
-    }
-    
-    let product = match &r.borrow().expr {
-        Emp => Rc::new(R::zero()),
-        Eps(s) => s.clone(),
-        Red(c, f) => f(&parsenull(c)),
-        Sym(_) => Rc::new(R::zero()),
-        Seq(l, r) => Rc::new(parsenull(&l).mul(&parsenull(&r))),
-        Alt(l, r) => Rc::new(parsenull(&l).add(&parsenull(&r))),
-        Ukn => unreachable!(),
-    };
+	if !nullable(&r) {
+		return Rc::new(R::zero());
+	}
 
-    {
-        let mut nbm = r.borrow_mut();
-        nbm.product = Some(product.clone());
-    }
+	let product = match &r.borrow().expr {
+		Emp => Rc::new(R::zero()),
+		Eps(s) => s.clone(),
+		Red(c, f) => f(&parsenull(c)),
+		Sym(_) => Rc::new(R::zero()),
+		Seq(l, r) => Rc::new(parsenull(&l).mul(&parsenull(&r))),
+		Alt(l, r) => Rc::new(parsenull(&l).add(&parsenull(&r))),
+		Ukn => unreachable!(),
+	};
 
-    product
+	{
+		let mut nbm = r.borrow_mut();
+		nbm.product = Some(product.clone());
+	}
+
+	product
 }
 
-pub fn parse<R, D, I>(r: &Expt<R, D>, source: &mut I) -> Rc<R>
+pub fn parse<R, D, I>(r: &RcExpr<R, D>, source: &mut I) -> Rc<R>
 where
-    R: Semiring + 'static,
-    D: PartialEq + Copy + Clone + 'static,
-    I: Iterator<Item = D>,
+	R: Rig + 'static,
+	D: PartialEq + Copy + Clone + 'static,
+	I: Iterator<Item = D>,
 {
-    let start = if let Some(c) = source.next() {
-        derive(&r, &c)
-    } else {
-        return parsenull(r);
-    };
+	let start = if let Some(c) = source.next() {
+		derive(&r, &c)
+	} else {
+		return parsenull(r);
+	};
 
-    let innerderive = |b, c| derive(&b, &c);
-    parsenull(&source.fold(start, innerderive))
+	let innerderive = |b, c| derive(&b, &c);
+	parsenull(&source.fold(start, innerderive))
 }
 
 #[cfg(test)]
 mod tests {
 
-    use super::*;
+	use super::*;
+	use std::collections::HashSet;
 
-    //  ___                       _
-    // | _ \___ __ ___  __ _ _ _ (_)______
-    // |   / -_) _/ _ \/ _` | ' \| |_ / -_)
-    // |_|_\___\__\___/\__, |_||_|_/__\___|
-    //                 |___/
+	//  ___                       _
+	// | _ \___ __ ___  __ _ _ _ (_)______
+	// |   / -_) _/ _ \/ _` | ' \| |_ / -_)
+	// |_|_\___\__\___/\__, |_||_|_/__\___|
+	//                 |___/
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub struct Recognizer(bool);
+	#[derive(Debug, Copy, Clone, PartialEq)]
+	pub struct Recognizer(bool);
 
-    impl Semiring for Recognizer {
-        fn one() -> Recognizer {
-            Recognizer(true)
-        }
-        fn zero() -> Recognizer {
-            Recognizer(false)
-        }
-        fn is_zero(&self) -> bool {
-            !self.0
-        }
-        fn mul(&self, rhs: &Recognizer) -> Recognizer {
-            Recognizer(self.0 && rhs.0)
-        }
-        fn add(&self, rhs: &Recognizer) -> Recognizer {
-            Recognizer(self.0 || rhs.0)
-        }
-    }
+	impl Rig for Recognizer {
+		fn one() -> Recognizer {
+			Recognizer(true)
+		}
+		fn zero() -> Recognizer {
+			Recognizer(false)
+		}
+		fn is_zero(&self) -> bool {
+			!self.0
+		}
+		fn mul(&self, rhs: &Recognizer) -> Recognizer {
+			Recognizer(self.0 && rhs.0)
+		}
+		fn add(&self, rhs: &Recognizer) -> Recognizer {
+			Recognizer(self.0 || rhs.0)
+		}
+	}
 
-    pub struct SimpleSym {
-        c: char,
-    }
+	pub struct SimpleSym {
+		c: char,
+	}
 
-    impl Sym<Recognizer, char> for SimpleSym {
-        fn is(&self, c: &char) -> Recognizer {
-            if *c == self.c {
-                Recognizer::one()
-            } else {
-                Recognizer::zero()
-            }
-        }
-    }
+	impl Sym<Recognizer, char> for SimpleSym {
+		fn is(&self, c: &char) -> Recognizer {
+			if *c == self.c {
+				Recognizer::one()
+			} else {
+				Recognizer::zero()
+			}
+		}
+	}
 
-    #[test]
-    fn basics() {
-        pub fn sym(sample: char) -> Expt<Recognizer, char> {
-            expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullable::Reject)
-        }
+	#[test]
+	fn basics() {
+		pub fn sym(sample: char) -> RcExpr<Recognizer, char> {
+			expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullable::Reject)
+		}
 
-        let cases = [
-            ("empty", eps(Recognizer::one()), "", true),
-            ("char", sym('a'), "a", true),
-            ("not char", sym('a'), "b", false),
-            ("char vs empty", sym('a'), "", false),
-            ("left alt", alt(&sym('a'), &sym('b')), "a", true),
-            ("right alt", alt(&sym('a'), &sym('b')), "b", true),
-            ("neither alt", alt(&sym('a'), &sym('b')), "c", false),
-            ("empty alt", alt(&sym('a'), &sym('b')), "", false),
-            ("empty rep", rep(&sym('a')), "", true),
-            ("sequence", seq(&sym('a'), &sym('b')), "ab", true),
-            ("sequence with empty", seq(&sym('a'), &sym('b')), "", false),
-            ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", false),
-            ("bad short sequence", seq(&sym('a'), &sym('b')), "a", false),
-            ("one rep", rep(&sym('a')), "a", true),
-            ("short multiple failed rep", rep(&sym('a')), "ab", false),
-            ("multiple rep", rep(&sym('a')), "aaaaaaaaa", true),
-            (
-                "multiple rep with failure",
-                rep(&sym('a')),
-                "aaaaaaaaab",
-                false,
-            ),
-        ];
+		let cases = [
+			("empty", eps(Recognizer::one()), "", true),
+			("char", sym('a'), "a", true),
+			("not char", sym('a'), "b", false),
+			("char vs empty", sym('a'), "", false),
+			("left alt", alt(&sym('a'), &sym('b')), "a", true),
+			("right alt", alt(&sym('a'), &sym('b')), "b", true),
+			("neither alt", alt(&sym('a'), &sym('b')), "c", false),
+			("empty alt", alt(&sym('a'), &sym('b')), "", false),
+			("empty rep", rep(&sym('a')), "", true),
+			("sequence", seq(&sym('a'), &sym('b')), "ab", true),
+			("sequence with empty", seq(&sym('a'), &sym('b')), "", false),
+			("bad long sequence", seq(&sym('a'), &sym('b')), "abc", false),
+			("bad short sequence", seq(&sym('a'), &sym('b')), "a", false),
+			("one rep", rep(&sym('a')), "a", true),
+			("short multiple failed rep", rep(&sym('a')), "ab", false),
+			("multiple rep", rep(&sym('a')), "aaaaaaaaa", true),
+			(
+				"multiple rep with failure",
+				rep(&sym('a')),
+				"aaaaaaaaab",
+				false,
+			),
+		];
 
-        for (name, case, sample, result) in &cases {
-            println!("{:?}", name);
-            assert_eq!(parse(&case, &mut sample.to_string().chars()).0, *result);
-        }
-    }
+		for (name, case, sample, result) in &cases {
+			println!("{:?}", name);
+			assert_eq!(parse(&case, &mut sample.to_string().chars()).0, *result);
+		}
+	}
 
-    //   _         __ _   _                __   __    _ _    _
-    //  | |   ___ / _| |_| |___ _ _  __ _  \ \ / /_ _| (_)__| |
-    //  | |__/ -_)  _|  _| / _ \ ' \/ _` |  \ V / _` | | / _` |
-    //  |____\___|_|  \__|_\___/_||_\__, |   \_/\__,_|_|_\__,_|
-    //                              |___/
+	//   _         __ _   _                __   __    _ _    _
+	//  | |   ___ / _| |_| |___ _ _  __ _  \ \ / /_ _| (_)__| |
+	//  | |__/ -_)  _|  _| / _ \ ' \/ _` |  \ V / _` | | / _` |
+	//  |____\___|_|  \__|_\___/_||_\__, |   \_/\__,_|_|_\__,_|
+	//                              |___/
 
-    #[test]
-    fn assert_leftlong_tests_valid() {
-        pub struct AnySym {};
+	#[test]
+	fn assert_leftlong_tests_valid() {
+		pub struct AnySym {};
 
-        impl Sym<Recognizer, char> for AnySym {
-            fn is(&self, _: &char) -> Recognizer {
-                return { Recognizer::one() };
-            }
-        }
+		impl Sym<Recognizer, char> for AnySym {
+			fn is(&self, _: &char) -> Recognizer {
+				return { Recognizer::one() };
+			}
+		}
 
-        pub fn sym(sample: char) -> Expt<Recognizer, char> {
-            expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullable::Reject)
-        }
+		pub fn sym(sample: char) -> RcExpr<Recognizer, char> {
+			expr(Brz::Sym(Rc::new(SimpleSym { c: sample })), Nullable::Reject)
+		}
 
-        pub fn asy() -> Expt<Recognizer, char> {
-            expr(Brz::Sym(Rc::new(AnySym {})), Nullable::Reject)
-        }
+		pub fn asy() -> RcExpr<Recognizer, char> {
+			expr(Brz::Sym(Rc::new(AnySym {})), Nullable::Reject)
+		}
 
-        let any = rep(&asy());
-        let a = sym('a');
-        let ab = rep(&alt(&a, &sym('b')));
-        let aaba = seq(&seq(&a, &ab), &a);
+		let any = rep(&asy());
+		let a = sym('a');
+		let ab = rep(&alt(&a, &sym('b')));
+		let aaba = seq(&seq(&a, &ab), &a);
 
-        let cases = [
-            ("any", &seq(&any, &sym('c')), "cbcdc", true),
-            ("leftlong sample zero", &aaba, "ab", false),
-            ("leftlong sample five", &aaba, "bababa", true),
-            ("leftlong sample one", &aaba, "aa", true),
-        ];
+		let cases = [
+			("any", &seq(&any, &sym('c')), "cbcdc", true),
+			("leftlong sample zero", &aaba, "ab", false),
+			("leftlong sample five", &aaba, "bababa", true),
+			("leftlong sample one", &aaba, "aa", true),
+		];
 
-        for (name, case, sample, result) in &cases {
-            println!("{:?}", name);
-            let arb = seq(&any, &seq(&case, &any));
-            assert_eq!(parse(&arb, &mut sample.to_string().chars()).0, *result);
-        }
-    }
+		for (name, case, sample, result) in &cases {
+			println!("{:?}", name);
+			let arb = seq(&any, &seq(&case, &any));
+			assert_eq!(parse(&arb, &mut sample.to_string().chars()).0, *result);
+		}
+	}
 
-    //  _         __ _   _
-    // | |   ___ / _| |_| |___ _ _  __ _
-    // | |__/ -_)  _|  _| / _ \ ' \/ _` |
-    // |____\___|_|  \__|_\___/_||_\__, |
-    //                             |___/
+	//  _         __ _   _
+	// | |   ___ / _| |_| |___ _ _  __ _
+	// | |__/ -_)  _|  _| / _ \ ' \/ _` |
+	// |____\___|_|  \__|_\___/_||_\__, |
+	//                             |___/
 
-    // The semiring and semiring_i implementations for the LeftLong
-    // Range operations.
+	// The semiring and semiring_i implementations for the LeftLong
+	// Range operations.
 
-    pub trait Semiringi<S: Semiring> {
-        fn index(i: usize) -> S;
-    }
+	pub trait Rigi<S: Rig> {
+		fn index(i: usize) -> S;
+	}
 
-    #[derive(Debug, Clone, Eq, PartialEq)]
-    pub enum Leftlong {
-        Notfound,            // Zero
-        Scanning,            // One
-        Found(usize, usize), // The set of useful datapoints
-    }
+	#[derive(Debug, Clone, Eq, PartialEq)]
+	pub enum Leftlong {
+		Notfound,            // Zero
+		Scanning,            // One
+		Found(usize, usize), // The set of useful datapoints
+	}
 
-    impl Semiring for Leftlong {
-        fn one() -> Leftlong {
-            Leftlong::Scanning
-        }
-        fn zero() -> Leftlong {
-            Leftlong::Notfound
-        }
-        fn is_zero(&self) -> bool {
-            match self {
-                Leftlong::Notfound => true,
-                _ => false,
-            }
-        }
+	impl Rig for Leftlong {
+		fn one() -> Leftlong {
+			Leftlong::Scanning
+		}
+		fn zero() -> Leftlong {
+			Leftlong::Notfound
+		}
+		fn is_zero(&self) -> bool {
+			match self {
+				Leftlong::Notfound => true,
+				_ => false,
+			}
+		}
 
-        fn add(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
-            use self::Leftlong::*;
-            match (self, rhs) {
-                (Notfound, c) | (c, Notfound) | (Scanning, c) | (c, Scanning) => c.clone(),
-                (Found(i, j), Found(k, l)) => {
-                    if i < k || i == k && j >= l {
-                        self.clone()
-                    } else {
-                        rhs.clone()
-                    }
-                }
-            }
-        }
+		fn add(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
+			use self::Leftlong::*;
+			match (self, rhs) {
+				(Notfound, c) | (c, Notfound) | (Scanning, c) | (c, Scanning) => c.clone(),
+				(Found(i, j), Found(k, l)) => {
+					if i < k || i == k && j >= l {
+						self.clone()
+					} else {
+						rhs.clone()
+					}
+				}
+			}
+		}
 
-        fn mul(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
-            use self::Leftlong::*;
-            match (self, rhs) {
-                (Notfound, _) | (_, Notfound) => Leftlong::zero(),
-                (Scanning, c) | (c, Scanning) => c.clone(),
-                (Found(i, _), Found(_, l)) => Leftlong::Found(*i, *l),
-            }
-        }
-    }
+		fn mul(self: &Leftlong, rhs: &Leftlong) -> Leftlong {
+			use self::Leftlong::*;
+			match (self, rhs) {
+				(Notfound, _) | (_, Notfound) => Leftlong::zero(),
+				(Scanning, c) | (c, Scanning) => c.clone(),
+				(Found(i, _), Found(_, l)) => Leftlong::Found(*i, *l),
+			}
+		}
+	}
 
-    impl Semiringi<Leftlong> for Leftlong {
-        fn index(i: usize) -> Leftlong {
-            Leftlong::Found(i, i)
-        }
-    }
+	impl Rigi<Leftlong> for Leftlong {
+		fn index(i: usize) -> Leftlong {
+			Leftlong::Found(i, i)
+		}
+	}
 
-    // The position and character being analyzed.
+	// The position and character being analyzed.
 
-    #[derive(Eq, PartialEq, Copy, Clone)]
-    pub struct Pc(usize, char);
+	#[derive(Eq, PartialEq, Copy, Clone)]
+	pub struct Pc(usize, char);
 
-    #[derive(Clone)]
-    pub struct RangeSym(char);
+	#[derive(Clone)]
+	pub struct RangeSym(char);
 
-    impl Sym<Leftlong, Pc> for RangeSym {
-        fn is(&self, pc: &Pc) -> Leftlong {
-            if pc.1 == self.0 {
-                Leftlong::index(pc.0)
-            } else {
-                Leftlong::zero()
-            }
-        }
-    }
+	impl Sym<Leftlong, Pc> for RangeSym {
+		fn is(&self, pc: &Pc) -> Leftlong {
+			if pc.1 == self.0 {
+				Leftlong::index(pc.0)
+			} else {
+				Leftlong::zero()
+			}
+		}
+	}
 
-    #[derive(Debug, Clone)]
-    pub struct AnySym {}
-    impl Sym<Leftlong, Pc> for AnySym {
-        fn is(&self, _: &Pc) -> Leftlong {
-            Leftlong::one()
-        }
-    }
+	#[derive(Debug, Clone)]
+	pub struct AnySym {}
+	impl Sym<Leftlong, Pc> for AnySym {
+		fn is(&self, _: &Pc) -> Leftlong {
+			Leftlong::one()
+		}
+	}
 
-    #[test]
-    fn leftlong_basics() {
-        pub fn asym() -> Expt<Leftlong, Pc> {
-            expr(Brz::Sym(Rc::new(AnySym {})), Nullable::Reject)
-        }
+	#[test]
+	fn leftlong_basics() {
+		pub fn asym() -> RcExpr<Leftlong, Pc> {
+			expr(Brz::Sym(Rc::new(AnySym {})), Nullable::Reject)
+		}
 
-        pub fn symi(sample: char) -> Expt<Leftlong, Pc> {
-            expr(Brz::Sym(Rc::new(RangeSym(sample))), Nullable::Reject)
-        }
+		pub fn symi(sample: char) -> RcExpr<Leftlong, Pc> {
+			expr(Brz::Sym(Rc::new(RangeSym(sample))), Nullable::Reject)
+		}
 
-        let a = symi('a');
-        let ab = rep(&alt(&a.clone(), &symi('b')));
-        let aaba = seq(&a.clone(), &seq(&ab, &a.clone()));
+		let a = symi('a');
+		let ab = rep(&alt(&a.clone(), &symi('b')));
+		let aaba = seq(&a.clone(), &seq(&ab, &a.clone()));
 
-        let cases = [
-            ("leftlong zero", &aaba.clone(), "ab", Leftlong::Notfound),
-            ("leftlong one", &aaba.clone(), "aa", Leftlong::Found(0, 1)),
-            (
-                "leftlong five",
-                &aaba.clone(),
-                "bababa",
-                Leftlong::Found(1, 5),
-            ),
-        ];
+		let cases = [
+			("leftlong zero", &aaba.clone(), "ab", Leftlong::Notfound),
+			("leftlong one", &aaba.clone(), "aa", Leftlong::Found(0, 1)),
+			(
+				"leftlong five",
+				&aaba.clone(),
+				"bababa",
+				Leftlong::Found(1, 5),
+			),
+		];
 
-        for (name, case, sample, result) in &cases {
-            println!("{:?}", name);
-            let any = rep(&asym());
-            let arb = seq(&any, &seq(&case, &any));
-            let ret = parse(
-                &arb,
-                &mut sample
-                    .to_string()
-                    .chars()
-                    .into_iter()
-                    .enumerate()
-                    .map(|c| Pc(c.0, c.1)),
-            );
-            assert_eq!(result, &*ret);
-        }
-    }
+		for (name, case, sample, result) in &cases {
+			println!("{:?}", name);
+			let any = rep(&asym());
+			let arb = seq(&any, &seq(&case, &any));
+			let ret = parse(
+				&arb,
+				&mut sample
+					.to_string()
+					.chars()
+					.into_iter()
+					.enumerate()
+					.map(|c| Pc(c.0, c.1)),
+			);
+			assert_eq!(result, &*ret);
+		}
+	}
 
-    //   ___
-    //   | _ \__ _ _ _ ___ ___
-    //   |  _/ _` | '_(_-</ -_)
-    //   |_| \__,_|_| /__/\___|
-    //
-    //
+	//   ___
+	//   | _ \__ _ _ _ ___ ___
+	//   |  _/ _` | '_(_-</ -_)
+	//   |_| \__,_|_| /__/\___|
+	//
+	//
 
-    macro_rules! set {
+	macro_rules! set {
         ( $( $x:expr ),* ) => {{
             #[allow(unused_mut)]
             let mut temp_set = HashSet::new();
@@ -774,137 +775,136 @@ mod tests {
         }};
     }
 
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Parser(HashSet<String>);
+	#[derive(Debug, Clone, PartialEq)]
+	pub struct Parser(HashSet<String>);
 
-    impl Semiring for Parser {
-        fn one() -> Parser {
-            Parser(set!["".to_string()])
-        }
-        fn zero() -> Parser {
-            Parser(set![])
-        }
-        fn is_zero(&self) -> bool {
-            self.0.len() == 0
-        }
-        fn mul(self: &Parser, rhs: &Parser) -> Parser {
-            let mut temp = set![];
-            for i in self.0.iter().cloned() {
-                for j in &rhs.0 {
-                    temp.insert(i.clone() + &j);
-                }
-            }
-            Parser(temp)
-        }
-        fn add(self: &Parser, rhs: &Parser) -> Parser {
-            Parser(self.0.union(&rhs.0).cloned().collect())
-        }
-    }
+	impl Rig for Parser {
+		fn one() -> Parser {
+			Parser(set!["".to_string()])
+		}
+		fn zero() -> Parser {
+			Parser(set![])
+		}
+		fn is_zero(&self) -> bool {
+			self.0.len() == 0
+		}
+		fn mul(self: &Parser, rhs: &Parser) -> Parser {
+			let mut temp = set![];
+			for i in self.0.iter().cloned() {
+				for j in &rhs.0 {
+					temp.insert(i.clone() + &j);
+				}
+			}
+			Parser(temp)
+		}
+		fn add(self: &Parser, rhs: &Parser) -> Parser {
+			Parser(self.0.union(&rhs.0).cloned().collect())
+		}
+	}
 
-    pub struct ParserSym {
-        c: char,
-    }
+	pub struct ParserSym {
+		c: char,
+	}
 
-    impl Sym<Parser, char> for ParserSym {
-        fn is(&self, c: &char) -> Parser {
-            if *c == self.c {
-                Parser(set![c.to_string()])
-            } else {
-                Parser::zero()
-            }
-        }
-    }
+	impl Sym<Parser, char> for ParserSym {
+		fn is(&self, c: &char) -> Parser {
+			if *c == self.c {
+				Parser(set![c.to_string()])
+			} else {
+				Parser::zero()
+			}
+		}
+	}
 
-    #[test]
-    fn string_basics() {
-        pub fn sym(sample: char) -> Expt<Parser, char> {
-            expr(Brz::Sym(Rc::new(ParserSym { c: sample })), Nullable::Reject)
-        }
+	#[test]
+	fn string_basics() {
+		pub fn sym(sample: char) -> RcExpr<Parser, char> {
+			expr(Brz::Sym(Rc::new(ParserSym { c: sample })), Nullable::Reject)
+		}
 
-        let cases = [
-            ("char", sym('a'), "a", Some("a")),
-            ("not char", sym('a'), "b", None),
-            ("char vs empty", sym('a'), "", None),
-            ("left alt", alt(&sym('a'), &sym('b')), "a", Some("a")),
-            ("right alt", alt(&sym('a'), &sym('b')), "b", Some("b")),
-            ("neither alt", alt(&sym('a'), &sym('b')), "c", None),
-            ("empty alt", alt(&sym('a'), &sym('b')), "", None),
-            ("empty rep", rep(&sym('a')), "", Some("")),
-            ("sequence", seq(&sym('a'), &sym('b')), "ab", Some("ab")),
-            ("sequence with empty", seq(&sym('a'), &sym('b')), "", None),
-            ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", None),
-            ("bad short sequence", seq(&sym('a'), &sym('b')), "a", None),
-            ("one rep", rep(&sym('a')), "a", Some("a")),
-            ("short multiple failed rep", rep(&sym('a')), "ab", None),
-            (
-                "multiple rep",
-                rep(&sym('a')),
-                "aaaaaaaaa",
-                Some("aaaaaaaaa"),
-            ),
-            (
-                "multiple rep with failure",
-                rep(&sym('a')),
-                "aaaaaaaaab",
-                None,
-            ),
-        ];
+		let cases = [
+			("char", sym('a'), "a", Some("a")),
+			("not char", sym('a'), "b", None),
+			("char vs empty", sym('a'), "", None),
+			("left alt", alt(&sym('a'), &sym('b')), "a", Some("a")),
+			("right alt", alt(&sym('a'), &sym('b')), "b", Some("b")),
+			("neither alt", alt(&sym('a'), &sym('b')), "c", None),
+			("empty alt", alt(&sym('a'), &sym('b')), "", None),
+			("empty rep", rep(&sym('a')), "", Some("")),
+			("sequence", seq(&sym('a'), &sym('b')), "ab", Some("ab")),
+			("sequence with empty", seq(&sym('a'), &sym('b')), "", None),
+			("bad long sequence", seq(&sym('a'), &sym('b')), "abc", None),
+			("bad short sequence", seq(&sym('a'), &sym('b')), "a", None),
+			("one rep", rep(&sym('a')), "a", Some("a")),
+			("short multiple failed rep", rep(&sym('a')), "ab", None),
+			(
+				"multiple rep",
+				rep(&sym('a')),
+				"aaaaaaaaa",
+				Some("aaaaaaaaa"),
+			),
+			(
+				"multiple rep with failure",
+				rep(&sym('a')),
+				"aaaaaaaaab",
+				None,
+			),
+		];
 
-        for (name, case, sample, result) in &cases {
-            println!("{:?}", name);
-            let ret = &parse(case, &mut sample.to_string().chars()).0;
-            match result {
-                Some(r) => {
-                    let v = ret.iter().next();
-                    if let Some(s) = v {
-                        assert_eq!(s, sample);
-                    } else {
-                        panic!("Strings did not match: {:?}, {:?}", r, v);
-                    }
-                    assert_eq!(1, ret.len());
-                }
-                None => assert_eq!(0, ret.len()),
-            }
-        }
-    }
+		for (name, case, sample, result) in &cases {
+			println!("{:?}", name);
+			let ret = &parse(case, &mut sample.to_string().chars()).0;
+			match result {
+				Some(r) => {
+					let v = ret.iter().next();
+					if let Some(s) = v {
+						assert_eq!(s, sample);
+					} else {
+						panic!("Strings did not match: {:?}, {:?}", r, v);
+					}
+					assert_eq!(1, ret.len());
+				}
+				None => assert_eq!(0, ret.len()),
+			}
+		}
+	}
 
-    #[test]
-    fn recursion_loop() {
-        pub fn sym(sample: char) -> Expt<Parser, char> {
-            expr(Brz::Sym(Rc::new(ParserSym{ c: sample })), Nullable::Reject)
-        }
+	#[test]
+	fn recursion_loop() {
+		pub fn sym(sample: char) -> RcExpr<Parser, char> {
+			expr(Brz::Sym(Rc::new(ParserSym { c: sample })), Nullable::Reject)
+		}
 
-        let ee = seq(&sym('e'), &sym('e'));
-        let mut estar = ukn();
-        let eep = seq(&ee, &estar);
-        let eto = eps(Parser::one());
-        alt_mutate(&mut estar, &eto, &eep);
-        let beer = seq(&sym('b'), &seq(&estar, &sym('r')));
+		let ee = seq(&sym('e'), &sym('e'));
+		let mut estar = ukn();
+		let eep = seq(&ee, &estar);
+		let eto = eps(Parser::one());
+		alt_mutate(&mut estar, &eto, &eep);
+		let beer = seq(&sym('b'), &seq(&estar, &sym('r')));
 
-        let cases = [
-            ("br", &beer, "br", Some("br")),
-            ("beer", &beer, "beer", Some("beer")),
-            ("beeeeeer", &beer, "beeeeeer", Some("beeeeeer")),
-            ("bad beeer", &beer, "beeer", None),
-            ("bad bear", &beer, "bear", None)
-        ];
+		let cases = [
+			("br", &beer, "br", Some("br")),
+			("beer", &beer, "beer", Some("beer")),
+			("beeeeeer", &beer, "beeeeeer", Some("beeeeeer")),
+			("bad beeer", &beer, "beeer", None),
+			("bad bear", &beer, "bear", None),
+		];
 
-        for (name, case, sample, result) in &cases {
-            println!("{:?}", name);
-            let ret = &parse(case, &mut sample.to_string().chars()).0;
-            match result {
-                Some(r) => {
-                    let v = ret.iter().next();
-                    if let Some(s) = v {
-                        assert_eq!(s, sample);
-                    } else {
-                        panic!("Strings did not match: {:?}, {:?}", r, v);
-                    }
-                    assert_eq!(1, ret.len());
-                }
-                None => assert_eq!(0, ret.len()),
-            }
-        }
-    }
-    
+		for (name, case, sample, result) in &cases {
+			println!("{:?}", name);
+			let ret = &parse(case, &mut sample.to_string().chars()).0;
+			match result {
+				Some(r) => {
+					let v = ret.iter().next();
+					if let Some(s) = v {
+						assert_eq!(s, sample);
+					} else {
+						panic!("Strings did not match: {:?}, {:?}", r, v);
+					}
+					assert_eq!(1, ret.len());
+				}
+				None => assert_eq!(0, ret.len()),
+			}
+		}
+	}
 }

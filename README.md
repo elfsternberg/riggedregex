@@ -104,6 +104,7 @@ Currently written:
 - [The Heavyweight Experiments: Glushkov Regex in Haskell with Disambiguation](./haskell/08_Heavyweights) (Section II.2)
 - [The Heavyweight Experiments: Glushkov Regex in Rust with Disambiguation](./rust/07_heavyweights) (Section II.2)
 - [The Final Experiment: Rigged Brzozowski's Regular Expressions in **Rust**](./rust/08_riggedbrz/)
+- [Mission accomplished: Rigged Brzozowski μ-Regular Expressions in **Rust**](./rust/09_riggedbrz/)
 
 ## Todo
 
@@ -114,6 +115,21 @@ operations) is theoretically sound.
 Darais's optimizations.
 - An implementation of a Rigged Brzozowski Algorithm with Might's
 recursion enabled, using Adams's laziness as its basis.
+=======
+
+## Caveat
+
+This codebase is a testbed for ideas to be incorporated into the
+[Barre](https://github.com/elfsternberg/barre), Brzozowski's Algorithm
+for Rust Regular Expressions.  It is now somewhat idle, as most
+development will be happening in that project, rather than this one.
+
+The last experiment, Rust 9, represents the culmination of the work.  It
+demonstrates the fundamentals of *recursive* regular expressions with a
+mathematically sound foundation for "lifting" the processing of a
+regular expression into a resultant dataset.  Recursive regular
+expressions with variables form the basis of an extremely powerful
+context-free grammar parser.
 
 ## Lessons learned
 

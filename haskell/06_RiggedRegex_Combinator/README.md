@@ -16,5 +16,12 @@ The result is a regular expression engine that returns all possible
 unique sets of strings that resulted from matching the regular
 expression, or the empty set if no match happened.
 
-I'm not yet comfortable with the theoretical underpinnings of this 
-variant, but I'm reading intensely to see where I can land this.
+<s>I'm not yet comfortable with the theoretical underpinnings of this 
+variant, but I'm reading intensely to see where I can land this.</s>
+
+It turns out that what I did is just fine, and is well-supported by the
+theoretical underpinnings.  See "[Semiring
+Parsing](https://www.aclweb.org/anthology/J99-4004.pdf)" by Joshua
+Goodman.
+
+

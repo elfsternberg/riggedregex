@@ -4,12 +4,12 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c735a49aa323a0bd6a109e4a453ba2856331ccb556a07fda17bc6c6550f898ed
+-- hash: bf664c2df8f31bc5a6ffd907ebaf10824d56d8d271f07d3f4cc7562ce9d44395
 
 name:           BrzExp
 version:        0.1.0.0
-category:       Web
-homepage:       https://github.com/elfsternberg/BrzExp#readme
+category:       Regex
+homepage:       https://github.com/elfsternberg/riggedregex#readme
 author:         Elf M. Sternberg
 maintainer:     elf.sternberg@gmail.com
 copyright:      Copyright ⓒ 2019 Elf M. Sternberg

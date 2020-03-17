@@ -68,7 +68,11 @@ pub fn derive(n: &Rc<Brz>, c: char) -> Rc<Brz> {
         Emp => emp(),
         Eps => emp(),
         Sym(u) => {
-            if c == *u { eps() } else { emp() }
+            if c == *u {
+                eps()
+            } else {
+                emp()
+            }
         }
         Seq(l, r) => {
             let s = seq(&derive(l, c), r);
@@ -78,8 +82,8 @@ pub fn derive(n: &Rc<Brz>, c: char) -> Rc<Brz> {
                 s
             }
         }
-        Alt(l, r) => alt(&derive(l, c), &derive(r, c)) ,
-        Rep(r)    => seq(&derive(r, c), &n.clone()),
+        Alt(l, r) => alt(&derive(l, c), &derive(r, c)),
+        Rep(r) => seq(&derive(r, c), &n.clone()),
     }
 }
 
@@ -103,7 +107,7 @@ pub fn accept(n: &Rc<Brz>, s: String) -> bool {
     let mut r = n.clone();
     loop {
         match source.next() {
-            None => { break nullable(&r) },
+            None => break nullable(&r),
             Some(ref c) => {
                 let np = derive(&r, *c);
                 println!("{:?}", np);
@@ -113,7 +117,7 @@ pub fn accept(n: &Rc<Brz>, s: String) -> bool {
                         break match source.peek() {
                             None => true,
                             Some(_) => false,
-                        }
+                        };
                     }
                     _ => r = np.clone(),
                 }
@@ -142,13 +146,18 @@ mod tests {
             ("one rep", rep(&sym('a')), "a", true),
             ("short multiple failed rep", rep(&sym('a')), "ab", false),
             ("multiple rep", rep(&sym('a')), "aaaaaaaaa", true),
-            ("multiple rep with failure", rep(&sym('a')), "aaaaaaaaab", false),
+            (
+                "multiple rep with failure",
+                rep(&sym('a')),
+                "aaaaaaaaab",
+                false,
+            ),
             ("sequence", seq(&sym('a'), &sym('b')), "ab", true),
             ("sequence with empty", seq(&sym('a'), &sym('b')), "", false),
             ("bad short sequence", seq(&sym('a'), &sym('b')), "a", false),
-            ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", false)
+            ("bad long sequence", seq(&sym('a'), &sym('b')), "abc", false),
         ];
-        
+
         for (name, case, sample, result) in &cases {
             println!("{:?}", name);
             assert_eq!(accept(case, sample.to_string()), *result);

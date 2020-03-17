@@ -4,12 +4,12 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 93522afe280d6faeb7b2a456024b15031bc39c277511370f57e8fd46133f0d84
+-- hash: c903f1e543aacf648806799a4c925c51ece2e6c833560c723350207fa137497f
 
 name:           Heavyweights
 version:        0.1.0.0
-category:       Web
-homepage:       https://github.com/elfsternberg/Heavyweights#readme
+category:       Regex
+homepage:       https://github.com/elfsternberg/riggedregex#readme
 author:         Elf M. Sternberg
 maintainer:     elf.sternberg@gmail.com
 copyright:      Copyright ⓒ 2019 Elf M. Sternberg

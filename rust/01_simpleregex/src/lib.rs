@@ -131,7 +131,7 @@ pub fn accept(r: &Reg, s: &[char]) -> bool {
             .any(|ps| ps.into_iter().all(|u| accept(r, &u))),
     }
 }
-    
+
 #[cfg(test)]
 mod tests {
     use super::*;

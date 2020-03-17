@@ -2,15 +2,15 @@
 
 This is a Glushkov's construction of regular expressions. The basic idea
 is that for every symbol encountered during parsing, a corresponding
-symbol in the tree is marked (or, if not symbols are marked, the parse
+symbol in the tree is marked (or, if no symbols are marked, the parse
 is a failure).  Composites are followed to their ends for each
 character, and if the symbol matches it is "marked".
 
-In this instance, are passing a Glushkov regular expression tree, and
-for each character it returns a new, complete copy of the tree, only
-with the marks "shifted" to where they should be given the character.
-In this way, each iteration of the tree keeps the NFA list of states
-that are active; they are the paths that lead to marked symbols.
+In this instance, we create a Glushkov regular expression tree, and for
+each character it returns a new, complete copy of the tree, only with
+the marks "shifted" to where they should be given the character.  In
+this way, each iteration of the tree keeps the NFA list of states that
+are active; they are the paths that lead to marked symbols.
 
 `ended` here means that no more symbols have to be read to match the
 expression.  `empty` here means that the expression matches only the

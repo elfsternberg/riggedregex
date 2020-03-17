@@ -4,12 +4,12 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 449255c7413f036aff0c96838da69ba9943a5d1a62e6d1f84e34bac8ec9bb6ec
+-- hash: b650d4292e70e7a507191f08e2c62b80a0eb311278b7aef3a2a084f2dac0c3ca
 
 name:           RiggedGlushkov
 version:        0.1.0.0
-category:       Web
-homepage:       https://github.com/elfsternberg/RiggedGlushkov#readme
+category:       Regex
+homepage:       https://github.com/elfsternberg/riggedregex#readme
 author:         Elf M. Sternberg
 maintainer:     elf.sternberg@gmail.com
 copyright:      Copyright ⓒ 2019 Elf M. Sternberg
